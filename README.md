@@ -13,3 +13,10 @@ It then crops
 # Usage
 
     tag-images.py *.JPG
+
+This creates the following files for each original image file `f.JPG`:
+
+- `f-timestamp.jpg`
+- `f.txt`
+- `f.JPG_original`
+- `f-cropped.jpg`
