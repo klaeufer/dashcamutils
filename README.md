@@ -20,3 +20,5 @@ This creates the following files for each original image file `f.JPG`:
 - `f.txt`
 - `f.JPG_original`
 - `f-cropped.jpg`
+
+When the OCR step fails, one can manually populate the metadata file (`.txt`) by visually inspecting the image and then run only the tagging and cropping stages.
