@@ -1,8 +1,8 @@
 # Purpose
 
 The current line of Garmin dash cams include a timestamp and GPS information visually in the image.
-This utility parses this information and populates the corresponding EXIF metadata.
-It then crops 
+This utility extracts this information using OCR, parses it, and populates the corresponding EXIF metadata.
+It then crops the image to remove the timestamp and usually the vehicle hood.
 
 # Dependencies
 
