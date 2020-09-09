@@ -6,6 +6,7 @@ It then crops the image to remove the timestamp and usually the vehicle hood.
 
 # Dependencies
 
+- Python 3
 - ImageMagick
 - OcrMyPDF
 - ExifTool
