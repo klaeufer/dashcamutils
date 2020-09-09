@@ -6,6 +6,12 @@ import re
 from datetime import datetime
 import exif
 
+
+ROTATION = 1
+#CROP = 256 # 1080
+CROP = 365 # 1440
+
+
 # TODO command line options for running only some of the stages
 # TODO hemisphere EW/NS prefixes
 
@@ -20,8 +26,11 @@ for arg in sys.argv[1:]:
     tsfile = basename + '-timestamp.jpg'
     datafile = basename + '.txt'
 
-    subprocess.run(f'convert -crop 1150x35+10+1035 +repage {imagefile} {tsfile}'.split())
-    subprocess.run(f'ocrmypdf --tesseract-oem 3 --tesseract-pagesegmode 7 --image-dpi 300 --sidecar {datafile} {tsfile} /dev/null'.split())
+# 1080
+#    subprocess.run(f'convert -crop 1150x35+10+1035 +repage {imagefile} {tsfile}'.split())
+# 1440
+#    subprocess.run(f'convert -crop 1150x50+10+1385 +repage {imagefile} {tsfile}'.split())
+#    subprocess.run(f'ocrmypdf --tesseract-oem 3 --tesseract-pagesegmode 7 --image-dpi 300 --sidecar {datafile} {tsfile} /dev/null'.split())
 
     line = open(datafile, 'r').readline()
     for ch in invalid_chars:
@@ -48,8 +57,7 @@ for arg in sys.argv[1:]:
         subprocess.run(['touch', '-d', f'{d}', f'{imagefile}'])
         subprocess.run(['exiftool', '-datetimeoriginal<filemodifydate', f'{imagefile}'])
         subprocess.run(f'exiftool -GPSLatitude={lat} -GPSLatitudeRef=N -GPSLongitude={lon} -GPSLongitudeRef=W -GPSSpeed={speed} -GPSSpeedRef=M {imagefile}'.split())
-
-        subprocess.run(f'convert -distort ScaleRotateTranslate 1.2 -crop +0-256 +repage {imagefile} {basename}-cropped.jpg'.split())
+        subprocess.run(f'convert -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {imagefile} {basename}-cropped.jpg'.split())
 
     except:
         print(line, 'INVALID TIMESTAMP')
