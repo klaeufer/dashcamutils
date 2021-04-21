@@ -3,7 +3,6 @@
 import argparse
 import logging
 import os
-import sys
 import subprocess
 import re
 from datetime import datetime
@@ -35,7 +34,15 @@ invalid_chars = ')—Z+_\'°=\"<>}~'
 ts = re.compile('(\d{4})/(\d{2})/(\d{2}).?([012]\d)[:27 ]{0,2}([012345]\d)[:27 ]{0,2}([012345]\d)')
 gps = re.compile('(\d{2})[.-]*(\d{5}).{0,2}-?(\d{2})[.-]*(\d{5})[. ]*(\d*)')
 
+found_invalid_timestamps = False
+
 def process_image(imagefile):
+    global found_invalid_timestamps
+
+    if not os.path.isfile(imagefile):
+        logging.warning(f'Image file {imagefile} not found, skipping')
+        return
+
     basename = imagefile.split('.JPG')[0]
     tsfile = basename + '-timestamp.jpg'
     datafile = basename + '.txt'
@@ -49,11 +56,11 @@ def process_image(imagefile):
         line = line.replace(ch, "")
     t = ts.search(line)
     g = gps.search(line)
-    if not t:
-        logging.warning(f'{basename}: invalid timestamp {t}')
-        return
-    if not g:
-        logging.warning(f'{basename}: invalid GPS info {g}')
+    if not t or not g:
+        found_invalid_timestamps = True
+        logging.warning(f'{basename}: invalid timestamp or GPS info {line}')
+        with open(FILENAME_INVALID_TS, "a") as invalid_ts:
+            invalid_ts.write(f'{imagefile} {line}')
         return
     try:
         d = datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
@@ -63,6 +70,7 @@ def process_image(imagefile):
             speed = int(g.group(5))
         except:
             speed = 0
+        # TODO create class for extracted TS/GPS data
         logging.info(f'{basename}: extracted {d} {lat} {lon} {speed}')
 
         subprocess.run(['touch', '-d', f'{d}', f'{imagefile}'])
@@ -71,15 +79,27 @@ def process_image(imagefile):
         subprocess.run(f'convert -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {imagefile} {basename}-cropped.jpg'.split())
 
     except:
-        logging.warning('Other error with Exiftool or ImageMagick convert')
+        logging.warning(f'{basename}: other error with Exiftool or ImageMagick convert')
 
+
+if os.path.isfile(FILENAME_INVALID_TS):
+    logging.info(f'Found existing invalid timestamps in {FILENAME_INVALID_TS}, please remove and retry')
+    exit(33)
 
 if os.path.isfile(FILENAME_MANUAL_TS):
-    logging.info("Found manual timestamps")
-    sys.exit(77)
+    logging.info('Found manual timestamps, processing')
+    with open(FILENAME_MANUAL_TS, "r") as manual_ts:
+        for line in manual_ts:
+            # TODO validate, extract, and apply to each file #11
+            print(line, end='')
+    exit(77)
 
 for arg in args.images:
     process_image(arg)
+
+if found_invalid_timestamps:
+    logging.info(f'Found one or more invalid timestamps, please check {FILENAME_INVALID_TS}')
+    logging.info(f'Then fix manually, rename to {FILENAME_MANUAL_TS}, and rerun')
 
 # TODO command-line option for original image resolution
 
