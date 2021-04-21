@@ -7,6 +7,22 @@ import re
 from datetime import datetime
 import exif
 
+def check_invalid_timestamps_exist():
+    if os.path.isfile(FILENAME_INVALID_TS):
+        logging.warning(f'Found existing invalid timestamps in {FILENAME_INVALID_TS}, appending')
+
+def check_manual_timestamps_exist(exit=True):
+    if os.path.isfile(FILENAME_MANUAL_TS):
+        logging.warning('Found manual timestamps, processing only the corresponding images')
+        process_manual_timestamps()
+        if exit:
+            exit(2)
+
+def check_invalid_timestamps_found():
+    if found_invalid_timestamps:
+        logging.error(f'Found one or more invalid timestamps, please check {FILENAME_INVALID_TS}')
+        logging.error(f'Then rename to {FILENAME_MANUAL_TS}, fix manually, and rerun')
+
 def read_timestamp(imagefile, skip_ocr=False):
     basename = imagefile.split('.JPG')[0]
     tsfile = basename + '-timestamp.jpg'
@@ -63,6 +79,8 @@ def adjust_image(imagefile):
     logging.info(f'{imagefile}: rotating and cropping image')
     basename = imagefile.split('.JPG')[0]
     subprocess.run(f'convert -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {imagefile} {basename}-cropped.jpg'.split())
+
+found_invalid_timestamps = False
 
 def process_image(imagefile, skip_ocr=False):
     global found_invalid_timestamps
