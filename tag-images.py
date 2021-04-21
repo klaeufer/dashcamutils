@@ -1,16 +1,31 @@
 #!/usr/bin/env python
 
+import argparse
+import os
 import sys
 import subprocess
 import re
 from datetime import datetime
 import exif
 
+parser = argparse.ArgumentParser()
+parser.add_argument("-s", "--skip_ocr", help="skip extraction of timestamp using OCR", action="store_true")
+parser.add_argument("-r", "--rotation_angle", help="image rotation angle", type=float, nargs='?', default=1.4)
+parser.add_argument("-c", "--crop_height", help="height of hood section to be cropped in pixels", nargs='?', type=int, default=365)
+parser.add_argument("images", help="images to process", nargs='*')
+args = parser.parse_args()
 
-ROTATION = 1
-#CROP = 256 # 1080
-CROP = 365 # 1440
+# print(args)
+# sys.exit(77)
 
+ROTATION = args.rotation_angle
+CROP = args.crop_height
+FILENAME_MANUAL_TS = "ManualTimestamps.txt"
+FILENAME_INVALID_TS = "InvalidTimestamps.txt"
+
+# ROTATION = 1.4
+# CROP = 256 # 1080
+# CROP = 365 # 1440
 
 # TODO command line options for running only some of the stages
 # TODO hemisphere EW/NS prefixes
@@ -19,18 +34,14 @@ invalid_chars = ')—Z+_\'°=\"<>}~'
 ts = re.compile('(\d{4})/(\d{2})/(\d{2}).?([012]\d)[:27 ]{0,2}([012345]\d)[:27 ]{0,2}([012345]\d)')
 gps = re.compile('(\d{2})[.-]*(\d{5}).{0,2}-?(\d{2})[.-]*(\d{5})[. ]*(\d*)')
 
-for arg in sys.argv[1:]:
-
-    imagefile = arg
+def process_image(imagefile):
     basename = imagefile.split('.JPG')[0]
     tsfile = basename + '-timestamp.jpg'
     datafile = basename + '.txt'
 
-# 1080
-#    subprocess.run(f'convert -crop 1150x35+10+1035 +repage {imagefile} {tsfile}'.split())
-# 1440
-#    subprocess.run(f'convert -crop 1150x50+10+1385 +repage {imagefile} {tsfile}'.split())
-#    subprocess.run(f'ocrmypdf --tesseract-oem 3 --tesseract-pagesegmode 7 --image-dpi 300 --sidecar {datafile} {tsfile} /dev/null'.split())
+    if not args.skip_ocr:
+        subprocess.run(f'convert -crop 1150x50+10+1385 +repage {imagefile} {tsfile}'.split())
+        subprocess.run(f'ocrmypdf --tesseract-oem 3 --tesseract-pagesegmode 7 --image-dpi 300 --sidecar {datafile} {tsfile} /dev/null'.split())
 
     line = open(datafile, 'r').readline()
     for ch in invalid_chars:
@@ -40,10 +51,10 @@ for arg in sys.argv[1:]:
     print(basename, end=': ')
     if not t:
         print(line, 'INVALID TIMESTAMP')
-        continue
+        return
     if not g:
         print(line, 'INVALID GPS INFO')
-        continue
+        return
     try:
         d = datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
         lat = float(g.group(1) + '.' + g.group(2))
@@ -60,4 +71,18 @@ for arg in sys.argv[1:]:
         subprocess.run(f'convert -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {imagefile} {basename}-cropped.jpg'.split())
 
     except:
-        print(line, 'INVALID TIMESTAMP')
+        print(line, 'INVALID TIMESTAMP2')
+
+
+if os.path.isfile(FILENAME_MANUAL_TS):
+    print("found manual timestamps")
+    sys.exit(77)
+
+for arg in args.images:
+    process_image(arg)
+
+# TODO command-line option for original image resolution
+
+# 1080
+#    subprocess.run(f'convert -crop 1150x35+10+1035 +repage {imagefile} {tsfile}'.split())
+# 1440
