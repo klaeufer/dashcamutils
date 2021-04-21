@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import logging
 import os
 import sys
 import subprocess
@@ -15,8 +16,8 @@ parser.add_argument("-c", "--crop_height", help="height of hood section to be cr
 parser.add_argument("images", help="images to process", nargs='*')
 args = parser.parse_args()
 
-# print(args)
-# sys.exit(77)
+logging.basicConfig(level=logging.DEBUG)
+logging.info(args)
 
 ROTATION = args.rotation_angle
 CROP = args.crop_height
@@ -48,12 +49,11 @@ def process_image(imagefile):
         line = line.replace(ch, "")
     t = ts.search(line)
     g = gps.search(line)
-    print(basename, end=': ')
     if not t:
-        print(line, 'INVALID TIMESTAMP')
+        logging.warning(f'{basename}: invalid timestamp {t}')
         return
     if not g:
-        print(line, 'INVALID GPS INFO')
+        logging.warning(f'{basename}: invalid GPS info {g}')
         return
     try:
         d = datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
@@ -63,7 +63,7 @@ def process_image(imagefile):
             speed = int(g.group(5))
         except:
             speed = 0
-        print(d, lat, lon, speed)
+        logging.info(f'{basename}: extracted {d} {lat} {lon} {speed}')
 
         subprocess.run(['touch', '-d', f'{d}', f'{imagefile}'])
         subprocess.run(['exiftool', '-datetimeoriginal<filemodifydate', f'{imagefile}'])
@@ -71,11 +71,11 @@ def process_image(imagefile):
         subprocess.run(f'convert -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {imagefile} {basename}-cropped.jpg'.split())
 
     except:
-        print(line, 'INVALID TIMESTAMP2')
+        logging.warning('Other error with Exiftool or ImageMagick convert')
 
 
 if os.path.isfile(FILENAME_MANUAL_TS):
-    print("found manual timestamps")
+    logging.info("Found manual timestamps")
     sys.exit(77)
 
 for arg in args.images:
