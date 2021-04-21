@@ -27,41 +27,41 @@ FILENAME_INVALID_TS = "InvalidTimestamps.txt"
 # CROP = 256 # 1080
 # CROP = 365 # 1440
 
-# TODO command line options for running only some of the stages
 # TODO hemisphere EW/NS prefixes
+
+def read_timestamp(imagefile, skip_ocr=False):
+    basename = imagefile.split('.JPG')[0]
+    tsfile = basename + '-timestamp.jpg'
+    datafile = basename + '.txt'
+
+    if not skip_ocr:
+        logging.info(f'{basename}: using OCR to write timestamp and GPS info using OCR to {datafile}')
+        subprocess.run(f'convert -crop 1150x50+10+1385 +repage {imagefile} {tsfile}'.split())
+        subprocess.run(f'ocrmypdf --tesseract-oem 3 --tesseract-pagesegmode 7 --image-dpi 300 --sidecar {datafile} {tsfile} /dev/null'.split())
+
+    logging.info(f'{basename}: reading timestamp and GPS info from {datafile}')
+    with open(datafile, 'r') as df:
+        return df.readline()
+
+def write_timestamp(imagefile, line):
+    basename = imagefile.split('.JPG')[0]
+    datafile = basename + '.txt'
+
+    with open(datafile, 'w') as df:
+        df.write(line)
+    logging.info(f'{basename}: wrote timestamp back to {datafile}')
+
+# timestamp and GPS format: GARMIN 2021/03/10 21:23:30 41.87074 -87.61696 35 MPH
 
 invalid_chars = ')—Z+_\'°=\"<>}~'
 ts = re.compile('(\d{4})/(\d{2})/(\d{2}).?([012]\d)[:27 ]{0,2}([012345]\d)[:27 ]{0,2}([012345]\d)')
 gps = re.compile('(\d{2})[.-]*(\d{5}).{0,2}-?(\d{2})[.-]*(\d{5})[. ]*(\d*)')
 
-found_invalid_timestamps = False
-
-def process_image(imagefile):
-    global found_invalid_timestamps
-
-    if not os.path.isfile(imagefile):
-        logging.warning(f'Image file {imagefile} not found, skipping')
-        return
-
-    basename = imagefile.split('.JPG')[0]
-    tsfile = basename + '-timestamp.jpg'
-    datafile = basename + '.txt'
-
-    if not args.skip_ocr:
-        subprocess.run(f'convert -crop 1150x50+10+1385 +repage {imagefile} {tsfile}'.split())
-        subprocess.run(f'ocrmypdf --tesseract-oem 3 --tesseract-pagesegmode 7 --image-dpi 300 --sidecar {datafile} {tsfile} /dev/null'.split())
-
-    line = open(datafile, 'r').readline()
+def parse_timestamp(line):
     for ch in invalid_chars:
         line = line.replace(ch, "")
     t = ts.search(line)
     g = gps.search(line)
-    if not t or not g:
-        found_invalid_timestamps = True
-        logging.warning(f'{basename}: invalid timestamp or GPS info {line}')
-        with open(FILENAME_INVALID_TS, "a") as invalid_ts:
-            invalid_ts.write(f'{imagefile} {line}')
-        return
     try:
         d = datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
         lat = float(g.group(1) + '.' + g.group(2))
@@ -70,38 +70,73 @@ def process_image(imagefile):
             speed = int(g.group(5))
         except:
             speed = 0
-        # TODO create class for extracted TS/GPS data
-        logging.info(f'{basename}: extracted {d} {lat} {lon} {speed}')
-
-        subprocess.run(['touch', '-d', f'{d}', f'{imagefile}'])
-        subprocess.run(['exiftool', '-datetimeoriginal<filemodifydate', f'{imagefile}'])
-        subprocess.run(f'exiftool -GPSLatitude={lat} -GPSLatitudeRef=N -GPSLongitude={lon} -GPSLongitudeRef=W -GPSSpeed={speed} -GPSSpeedRef=M {imagefile}'.split())
-        subprocess.run(f'convert -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {imagefile} {basename}-cropped.jpg'.split())
-
+        return (d, lat, lon, speed)
     except:
-        logging.warning(f'{basename}: other error with Exiftool or ImageMagick convert')
+        return None
 
+def update_metadata(imagefile, data):
+    logging.info(f'{imagefile}: tagging with timestamp and GPS metadata')
+    (d, lat, lon, speed) = data
+    subprocess.run(['touch', '-d', f'{d}', f'{imagefile}'])
+    subprocess.run(['exiftool', '-datetimeoriginal<filemodifydate', f'{imagefile}'])
+    subprocess.run(f'exiftool -GPSLatitude={lat} -GPSLatitudeRef=N -GPSLongitude={lon} -GPSLongitudeRef=W -GPSSpeed={speed} -GPSSpeedRef=M {imagefile}'.split())
+
+def adjust_image(imagefile):
+    logging.info(f'{imagefile}: rotating and cropping image')
+    basename = imagefile.split('.JPG')[0]
+    subprocess.run(f'convert -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {imagefile} {basename}-cropped.jpg'.split())
+
+found_invalid_timestamps = False
+
+def process_image(imagefile, skip_ocr=False):
+    global found_invalid_timestamps
+
+    if not os.path.isfile(imagefile):
+        logging.warning(f'Image file {imagefile} not found, skipping')
+        return
+
+    line = read_timestamp(imagefile, skip_ocr)
+    data = parse_timestamp(line)
+
+    if not data:
+        found_invalid_timestamps = True
+        logging.error(f'{imagefile}: invalid timestamp or GPS info {line}, writing to {FILENAME_INVALID_TS}')
+        with open(FILENAME_INVALID_TS, "a") as invalid_ts:
+            invalid_ts.write(f'{imagefile} {line}')
+        return
+
+    try:
+        (d, lat, lon, speed) = data
+        update_metadata(imagefile, data)
+        adjust_image(imagefile)
+    except:
+        logging.error(f'{basename}: error running Exiftool or ImageMagick convert')
 
 if os.path.isfile(FILENAME_INVALID_TS):
-    logging.info(f'Found existing invalid timestamps in {FILENAME_INVALID_TS}, please remove and retry')
-    exit(33)
+    logging.warning(f'Found existing invalid timestamps in {FILENAME_INVALID_TS}, appending')
 
 if os.path.isfile(FILENAME_MANUAL_TS):
-    logging.info('Found manual timestamps, processing')
+    logging.warning('Found manual timestamps, processing only the corresponding images')
     with open(FILENAME_MANUAL_TS, "r") as manual_ts:
-        for line in manual_ts:
-            # TODO validate, extract, and apply to each file #11
-            print(line, end='')
-    exit(77)
+        for raw_line in manual_ts:
+            [imagefile, line] = raw_line.split(maxsplit=1)
+            try:
+                (d, lat, lon, speed) = parse_timestamp(line)
+                logging.info(f'{imagefile}: extracted {d} {lat} {lon} {speed}')
+                write_timestamp(imagefile, line)
+                process_image(imagefile, True)
+            except:
+                logging.error(f'{imagefile}: invalid timestamp or GPS info {line}')
+    exit(2)
 
-for arg in args.images:
-    process_image(arg)
+for imagefile in args.images:
+    process_image(imagefile)
 
 if found_invalid_timestamps:
-    logging.info(f'Found one or more invalid timestamps, please check {FILENAME_INVALID_TS}')
-    logging.info(f'Then fix manually, rename to {FILENAME_MANUAL_TS}, and rerun')
+    logging.error(f'Found one or more invalid timestamps, please check {FILENAME_INVALID_TS}')
+    logging.error(f'Then rename to {FILENAME_MANUAL_TS}, fix manually, and rerun')
 
-# TODO command-line option for original image resolution
+# TODO command-line option for original image resolution - or detect automatically?
 
 # 1080
 #    subprocess.run(f'convert -crop 1150x35+10+1035 +repage {imagefile} {tsfile}'.split())
