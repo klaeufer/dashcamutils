@@ -24,7 +24,7 @@ helpers.FILENAME_INVALID_TS = "InvalidTimestamps.txt"
 helpers.process_manual_timestamps(args.validity_check_manual)
 helpers.check_invalid_timestamps_exist()
 
-for imagefile in args.images:
+for imagefile in args.image:
     helpers.process_image(imagefile)
 
 helpers.check_invalid_timestamps_found()
