@@ -10,7 +10,7 @@ parser.add_argument("-c", "--crop_height", help="height of hood section to be cr
 parser.add_argument("-r", "--rotation_angle", help="image rotation angle", type=float, nargs='?', default=1.4)
 parser.add_argument("-s", "--skip_ocr", help="skip extraction of timestamp using OCR", action="store_true")
 parser.add_argument("-v", "--validity_check_manual", help="check validity of manual timestamps", action="store_true")
-parser.add_argument("images", help="images to process", nargs='*')
+parser.add_argument("image", help="images to process", nargs='*')
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.DEBUG)
