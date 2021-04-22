@@ -6,9 +6,10 @@ import logging
 import helpers
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-s", "--skip_ocr", help="skip extraction of timestamp using OCR", action="store_true")
-parser.add_argument("-r", "--rotation_angle", help="image rotation angle", type=float, nargs='?', default=1.4)
 parser.add_argument("-c", "--crop_height", help="height of hood section to be cropped in pixels", nargs='?', type=int, default=365)
+parser.add_argument("-r", "--rotation_angle", help="image rotation angle", type=float, nargs='?', default=1.4)
+parser.add_argument("-s", "--skip_ocr", help="skip extraction of timestamp using OCR", action="store_true")
+parser.add_argument("-v", "--validity_check_manual", help="check validity of manual timestamps", action="store_true")
 parser.add_argument("images", help="images to process", nargs='*')
 args = parser.parse_args()
 
@@ -18,10 +19,10 @@ logging.info(args)
 helpers.ROTATION = args.rotation_angle
 helpers.CROP = args.crop_height
 helpers.FILENAME_MANUAL_TS = "ManualTimestamps.txt"
-helpers.FILENAME_INVALID_TS = "InvalidTImestamps.txt"
+helpers.FILENAME_INVALID_TS = "InvalidTimestamps.txt"
 
 helpers.check_invalid_timestamps_exist()
-helpers.check_manual_timestamps_exist()
+helpers.process_manual_timestamps(args.validity_check_manual)
 
 for imagefile in args.images:
     helpers.process_image(imagefile)

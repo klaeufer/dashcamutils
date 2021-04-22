@@ -11,13 +11,6 @@ def check_invalid_timestamps_exist():
     if os.path.isfile(FILENAME_INVALID_TS):
         logging.warning(f'Found existing invalid timestamps in {FILENAME_INVALID_TS}, appending')
 
-def check_manual_timestamps_exist(exit=True):
-    if os.path.isfile(FILENAME_MANUAL_TS):
-        logging.warning('Found manual timestamps, processing only the corresponding images')
-        process_manual_timestamps()
-        if exit:
-            exit(2)
-
 def check_invalid_timestamps_found():
     if found_invalid_timestamps:
         logging.error(f'Found one or more invalid timestamps, please check {FILENAME_INVALID_TS}')
@@ -106,14 +99,19 @@ def process_image(imagefile, skip_ocr=False):
     except:
         logging.error(f'{imagefile}: error running Exiftool or ImageMagick convert')
 
-def process_manual_timestamps():
-    with open(FILENAME_MANUAL_TS, "r") as manual_ts:
-        for raw_line in manual_ts:
-            [imagefile, line] = raw_line.split(maxsplit=1)
-            try:
-                (d, lat, lon, speed) = parse_timestamp(line)
-                logging.info(f'{imagefile}: extracted {d} {lat} {lon} {speed}')
-                write_timestamp(imagefile, line)
-                process_image(imagefile, True)
-            except:
-                logging.error(f'{imagefile}: invalid timestamp or GPS info {line}')
+def process_manual_timestamps(check_only):
+    if os.path.isfile(FILENAME_MANUAL_TS):
+        logging.warning('Found manual timestamps, processing only the corresponding images')
+        with open(FILENAME_MANUAL_TS, "r") as manual_ts:
+            for raw_line in manual_ts:
+                [imagefile, line] = raw_line.split(maxsplit=1)
+                try:
+                    (d, lat, lon, speed) = parse_timestamp(line)
+                    logging.info(f'{imagefile}: extracted {d} {lat} {lon} {speed}')
+                    if check_only:
+                        continue
+                    write_timestamp(imagefile, line)
+                    process_image(imagefile, True)
+                except:
+                    logging.error(f'{imagefile}: invalid timestamp or GPS info {line}')
+        exit(2)
