@@ -6,6 +6,7 @@ import subprocess
 import re
 from datetime import datetime
 import exif
+import pytesseract
 
 def check_invalid_timestamps_exist():
     if os.path.isfile(FILENAME_INVALID_TS):
