@@ -4,7 +4,7 @@ import logging
 import os
 import subprocess
 import re
-from datetime import datetime
+import datetime
 import exif
 import pytesseract
 
@@ -51,7 +51,7 @@ def parse_timestamp(line):
     t = ts.search(line)
     g = gps.search(line)
     try:
-        d = datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
+        d = datetime.datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
         lat = float(g.group(1) + '.' + g.group(2))
         lon = -float(g.group(3) + '.' + g.group(4))
         try:

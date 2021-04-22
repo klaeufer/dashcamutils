@@ -21,8 +21,8 @@ helpers.CROP = args.crop_height
 helpers.FILENAME_MANUAL_TS = "ManualTimestamps.txt"
 helpers.FILENAME_INVALID_TS = "InvalidTimestamps.txt"
 
-helpers.check_invalid_timestamps_exist()
 helpers.process_manual_timestamps(args.validity_check_manual)
+helpers.check_invalid_timestamps_exist()
 
 for imagefile in args.images:
     helpers.process_image(imagefile)
