@@ -25,7 +25,7 @@ helpers.process_manual_timestamps(args.validity_check_manual)
 helpers.check_invalid_timestamps_exist()
 
 for imagefile in args.image:
-    helpers.process_image(imagefile)
+    helpers.process_image(imagefile, args.skip_ocr)
 
 helpers.check_invalid_timestamps_found()
 
