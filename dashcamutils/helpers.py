@@ -121,12 +121,12 @@ def process_manual_timestamps(check_only):
             for raw_line in manual_ts:
                 [imagefile, line] = raw_line.split(maxsplit=1)
                 try:
-                    (d, lat, lon, speed) = parse_timestamp(line)
+                    (d, (lat, lon, speed)) = parse_timestamp(line)
                     logging.info(f'{imagefile}: extracted {d} {lat} {lon} {speed}')
                     if check_only:
                         continue
                     write_timestamp(imagefile, line)
                     process_image(imagefile, True)
                 except:
-                    logging.error(f'{imagefile}: invalid timestamp or GPS info {line}')
+                    logging.error(f'{imagefile}: invalid timestamp or GPS info {line.rstrip()}')
         exit(2)

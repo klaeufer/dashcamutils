@@ -18,10 +18,6 @@ def main():
     logging.basicConfig(level=logging.DEBUG)
     logging.info(args)
 
-    if len(sys.argv) == 1:
-        parser.print_usage()
-        exit(1)
-
     helpers.ROTATION = args.rotation_angle
     helpers.CROP = args.crop_height
     helpers.FILENAME_MANUAL_TS = "ManualTimestamps.txt"
