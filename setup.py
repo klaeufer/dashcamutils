@@ -10,14 +10,25 @@ with open('README.md') as f:
 with open('LICENSE') as f:
     license = f.read()
 
+with open('requirements.txt') as f:
+    requirements = [line.rstrip() for line in f]
+
 setup(
     name='dashcamutils',
-    version='0.1.0',
+#    version=dashcamutils.version(),
+    version='0.2.0',
     description='Garmin Dash Cam utilities for populating EXIF metadata from visual timestamp embedded in images',
     long_description=readme,
     author='Konstantin Läufer',
     author_email='laufer@cs.luc.edu',
     url='https://github.com/klaeufer/dashcamutils',
     license=license,
-    packages=find_packages(exclude=('tests', 'docs'))
+    python_requires='>=3',
+    install_requires=requirements,
+    packages=find_packages(exclude=('tests', 'docs')),
+    entry_points = {
+        'console_scripts': [
+            'tag_images = dashcamutils.tag_images:main'
+        ]
+    }
 )
