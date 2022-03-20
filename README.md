@@ -53,3 +53,17 @@ One can then perform the following steps:
 - Manually edit the invalid timestamps based on visual inspection of the corresponding images.
 - Check the validity of the edited timestamps using the `--validity_check_manual` option and re-edit if necessary.
 - Rerun the script without the `--validity_check_manual` option.
+
+# Development
+
+First-time setup:
+
+```
+$ pipenv install -r requirements.txt
+$ pipenv shell
+$ pipenv install -e .
+$ tag_images ...
+```
+
+For subsequent uses, simply repeat the `pipenv shell` command and then
+run `tag_images`.
