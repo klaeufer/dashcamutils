@@ -41,10 +41,10 @@ def write_timestamp(imagefile, line):
 
 invalid_chars = ')—Z+_\'°=\"<>}~'
 ts = re.compile('(\d{4})/(\d{2})/(\d{2}).?([012]\d)[:27 ]{0,2}([012345]\d)[:27 ]{0,2}([012345]\d)')
-gps = re.compile('(\d{2})[.-]*(\d{5}).{0,2}-?(\d{2})[.-]*(\d{5})[. ]*(\d*)')
+gps = re.compile('(\d{2})[.-]*(\d{5}).{0,2}-?(\d{2,3})[.-]*(\d{5})[. ]*(\d*)')
 
 # String -> (String?, (Float, Float, Int)?)
-def parse_timestamp(line): 
+def parse_timestamp(line):
     for ch in invalid_chars:
         line = line.replace(ch, "")
     t = ts.search(line)
