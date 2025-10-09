@@ -37,11 +37,19 @@ def write_timestamp(imagefile, line):
         df.write(line)
     logging.info(f'{basename}: wrote timestamp back to {datafile}')
 
-# timestamp and GPS format: GARMIN 2021/03/10 21:23:30 41.87074 -87.61696 35 MPH
+# timestamp and GPS format:
+#  yyyymmdd GARMIN 2021/03/10 21:23:30 41.87074 -87.61696 35 MPH
+#  mmddyyyy GARMIN 10/23/2022 10:31:08 PM 41.87795 -87.62056 26 MPF
 
 invalid_chars = ')—Z+_\'°=\"<>}~'
-ts = re.compile('(\d{4})/(\d{2})/(\d{2}).?([012]\d)[:27 ]{0,2}([012345]\d)[:27 ]{0,2}([012345]\d)')
-gps = re.compile('(\d{2})[.-]*(\d{5}).{0,2}-?(\d{2,3})[.-]*(\d{5})[. ]*(\d*)')
+yyyymmdd =    re.compile('(\\d{4})/(\\d{2})/(\\d{2}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d)')
+mmddyyyy =    re.compile('(\\d{2})/(\\d{2})/(\\d{4}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d) (AM|PM)')
+mmddyyyy24h = re.compile('(\\d{2})/(\\d{2})/(\\d{4}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d)')
+# 1) CHOOSE TS format here
+#ts = yyyymmdd
+#ts = mmddyyyy
+ts = mmddyyyy24h
+gps = re.compile('(\\d{2})[.-]*(\\d{5}).{0,2}-?(\\d{2,3})[.-]*(\\d{5})[. ]*(\\d*)')
 
 # String -> (String?, (Float, Float, Int)?)
 def parse_timestamp(line):
@@ -55,7 +63,10 @@ def parse_timestamp(line):
 
     # attempt to parse GPS data only if time/date stamp is valid
     try:
+# 2) CHOOSE HERE BASED ON TS FORMAT        
         d = datetime.datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
+#        d = datetime.datetime.strptime(''.join(t.groups()), '%m%d%Y%I%M%S%p')
+#        d = datetime.datetime.strptime(''.join(t.groups()), '%m%d%Y%H%M%S')
         try:
             lat = float(g.group(1) + '.' + g.group(2))
             lon = -float(g.group(3) + '.' + g.group(4))

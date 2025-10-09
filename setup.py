@@ -3,7 +3,6 @@
 # Learn more: https://github.com/kennethreitz/setup.py
 
 from setuptools import setup, find_packages
-from dashcamutils import version
 
 with open('README.md') as f:
     readme = f.read()
@@ -16,8 +15,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='dashcamutils',
-#    version=dashcamutils.version(),
-    version=version.version(),
+    version='0.2.1',
     description='Garmin Dash Cam utilities for populating EXIF metadata from visual timestamp embedded in images',
     long_description=readme,
     author='Konstantin Läufer',
