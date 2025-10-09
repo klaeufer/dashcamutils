@@ -27,7 +27,8 @@ def main():
     helpers.FILENAME_MANUAL_TS = "ManualTimestamps.txt"
     helpers.FILENAME_INVALID_TS = "InvalidTimestamps.txt"
 
-    helpers.process_manual_timestamps(args.validity_check_manual)
+    if not args.image:
+        helpers.process_manual_timestamps(args.validity_check_manual)
     helpers.check_invalid_timestamps_exist()
 
     for imagefile in args.image:

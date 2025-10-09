@@ -40,43 +40,46 @@ def write_timestamp(imagefile, line):
 #  mmddyyyy GARMIN 10/23/2022 10:31:08 PM 41.87795 -87.62056 26 MPF
 
 invalid_chars = ')—Z+_\'°=\"<>}~'
-yyyymmdd =    re.compile('(\\d{4})/(\\d{2})/(\\d{2}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d)')
-mmddyyyy =    re.compile('(\\d{2})/(\\d{2})/(\\d{4}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d) (AM|PM)')
-mmddyyyy24h = re.compile('(\\d{2})/(\\d{2})/(\\d{4}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d)')
-# 1) CHOOSE TS format here
-#ts = yyyymmdd
-#ts = mmddyyyy
-ts = mmddyyyy24h
+
+# Define all possible timestamp formats
+TS_FORMATS = [
+    (re.compile('(\\d{4})/(\\d{2})/(\\d{2}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d)'), '%Y%m%d%H%M%S'),
+    (re.compile('(\\d{2})/(\\d{2})/(\\d{4}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d) (AM|PM)'), '%m%d%Y%I%M%S%p'),
+    (re.compile('(\\d{2})/(\\d{2})/(\\d{4}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d)'), '%m%d%Y%H%M%S'),
+]
+
 gps = re.compile('(\\d{2})[.-]*(\\d{5}).{0,2}-?(\\d{2,3})[.-]*(\\d{5})[. ]*(\\d*)')
 
 # String -> (String?, (Float, Float, Int)?)
 def parse_timestamp(line):
     for ch in invalid_chars:
         line = line.replace(ch, "")
-    t = ts.search(line)
+
     g = gps.search(line)
 
     d = None
     l = None
-
-    # attempt to parse GPS data only if time/date stamp is valid
-    try:
-# 2) CHOOSE HERE BASED ON TS FORMAT        
-#        d = datetime.datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
-#        d = datetime.datetime.strptime(''.join(t.groups()), '%m%d%Y%I%M%S%p')
-        d = datetime.datetime.strptime(''.join(t.groups()), '%m%d%Y%H%M%S')
-        try:
-            lat = float(g.group(1) + '.' + g.group(2))
-            lon = -float(g.group(3) + '.' + g.group(4))
+    
+    # Try each timestamp format
+    for ts_regex, ts_format in TS_FORMATS:
+        t = ts_regex.search(line)
+        if t:
             try:
-                speed = int(g.group(5))
+                d = datetime.datetime.strptime(''.join(t.groups()), ts_format)
+                # Successfully parsed timestamp, now try GPS
+                try:
+                    lat = float(g.group(1) + '.' + g.group(2))
+                    lon = -float(g.group(3) + '.' + g.group(4))
+                    try:
+                        speed = int(g.group(5))
+                    except:
+                        speed = 0
+                    l = (lat, lon, speed)
+                except:
+                    pass
+                break  # Successfully parsed timestamp, exit loop
             except:
-                speed = 0
-            l = (lat, lon, speed)
-        except:
-            pass
-    except:
-        pass
+                continue  # Try next format
 
     return (d, l)
 
