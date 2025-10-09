@@ -50,8 +50,19 @@ the file `InvalidTimestamps.txt` in the current directory.
 One can then perform the following steps:
 
 - Rename `InvalidTimestamps.txt` to `ManualTimestamps.txt`. 
-- Manually edit the invalid timestamps based on visual inspection of the corresponding images.
-- Check the validity of the edited timestamps using the `--validity_check_manual` option and re-edit if necessary.
+- Manually edit the invalid timestamps based on visual inspection of the corresponding images, or use AI to fix based on suitable heuristics:
+  - all timestamps are in the standard Garmin format, though in some cases only date and time are present while GPS location/speed are not
+  - actual deviations from the correct format are caused by OCR problems
+  - the first field on each line is the image file name
+  - the second field is always the string GARMIN (which sometimes gets garbled because of OCR problems)
+  - images are taken in consecutive numerical order (part of the filenames)
+  - the images were taken while driving, so consecutive images taken during the same trip would be close to each other in time and location 
+- Check the validity of the edited timestamps using the `--validity_check_manual` option and re-edit if necessary:
+
+  ```bash
+  tag_images -v 2>&1 > /dev/null | grep ERROR
+  ```
+
 - Rerun the script without the `--validity_check_manual` option.
 
 # Development

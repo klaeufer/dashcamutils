@@ -3,12 +3,10 @@ import os
 import subprocess
 import re
 import datetime
-import exif
-import pytesseract
 
 def check_invalid_timestamps_exist():
     if os.path.isfile(FILENAME_INVALID_TS):
-        logging.warning(f'Found existing invalid timestamps in {FILENAME_INVALID_TS}, appending if applicable')
+        logging.info(f'Found existing invalid timestamps in {FILENAME_INVALID_TS}, appending if applicable')
 
 def check_invalid_timestamps_found():
     if found_invalid_timestamps:
@@ -22,7 +20,7 @@ def read_timestamp(imagefile, skip_ocr=False):
 
     if not skip_ocr:
         logging.info(f'{basename}: attempting OCR to write timestamp and GPS info to {datafile}')
-        subprocess.run(f'convert -crop 1150x50+10+1385 +repage {imagefile} {tsfile}'.split())
+        subprocess.run(f'magick {imagefile} -crop 1150x50+10+1385 +repage {tsfile}'.split())
         subprocess.run(f'ocrmypdf --tesseract-oem 3 --tesseract-pagesegmode 7 --image-dpi 300 --sidecar {datafile} {tsfile} /dev/null'.split())
 
     logging.info(f'{basename}: reading timestamp and GPS info from {datafile}')
@@ -64,9 +62,9 @@ def parse_timestamp(line):
     # attempt to parse GPS data only if time/date stamp is valid
     try:
 # 2) CHOOSE HERE BASED ON TS FORMAT        
-        d = datetime.datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
+#        d = datetime.datetime.strptime(''.join(t.groups()), '%Y%m%d%H%M%S')
 #        d = datetime.datetime.strptime(''.join(t.groups()), '%m%d%Y%I%M%S%p')
-#        d = datetime.datetime.strptime(''.join(t.groups()), '%m%d%Y%H%M%S')
+        d = datetime.datetime.strptime(''.join(t.groups()), '%m%d%Y%H%M%S')
         try:
             lat = float(g.group(1) + '.' + g.group(2))
             lon = -float(g.group(3) + '.' + g.group(4))
@@ -100,7 +98,7 @@ def adjust_image(imagefile):
     try:
         logging.info(f'{imagefile}: rotating and cropping image')
         basename = imagefile.split('.JPG')[0]
-        subprocess.run(f'convert -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {imagefile} {basename}-cropped.jpg'.split())
+        subprocess.run(f'magick {imagefile} -distort ScaleRotateTranslate {ROTATION} -crop +0-{CROP} +repage {basename}-cropped.jpg'.split())
     except:
         logging.error(f'{imagefile}: error running ImageMagick convert')
 
