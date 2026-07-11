@@ -121,7 +121,7 @@ def process_image(imagefile, skip_ocr=False):
         found_invalid_timestamps = True
         logging.error(f'{imagefile}: invalid or missing timestamp or GPS info {line}, writing to {FILENAME_INVALID_TS}')
         with open(FILENAME_INVALID_TS, "a") as invalid_ts:
-            invalid_ts.write(f'{imagefile} {line}')
+            invalid_ts.write(f'{imagefile} {line}\n')
 
     update_metadata(imagefile, (d, l))
     adjust_image(imagefile)
