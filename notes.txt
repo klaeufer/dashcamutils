@@ -1,0 +1,9 @@
+https://unix.stackexchange.com/questions/426976/converting-date-timestamp-from-12-hour-into-24-using-awk
+
+
+awk -F'/' '{printf("%04d/%02d/%02d\n",$3,$1,$2)}' <<< 'asdf 07/19/2021 asdf'
+
+
+510-527: 12h
+528-612: 24h
+612-: 12h

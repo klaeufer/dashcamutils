@@ -67,14 +67,15 @@ One can then perform the following steps:
 
 # Development
 
-First-time setup:
+Requires [uv](https://docs.astral.sh/uv/). Python 3.14 is pinned in `.python-version`.
 
 ```
-$ pipenv install -r requirements.txt
-$ pipenv shell
-$ pipenv install -e .
-$ tag_images ...
+$ uv sync
+$ uv run tag_images ...
 ```
 
-For subsequent uses, simply repeat the `pipenv shell` command and then
-run `tag_images`.
+Checks (ruff lint/format and ty type check):
+
+```
+$ make check
+```

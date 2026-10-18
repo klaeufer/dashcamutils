@@ -3,4 +3,4 @@
 from dashcamutils.version import version
 
 __version__ = version()
-__all__ = ['helpers', 'tag_images', 'version']
+__all__ = ["helpers", "tag_images", "version"]

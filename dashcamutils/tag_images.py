@@ -1,23 +1,43 @@
 #!/usr/bin/env python
 
-from . import helpers
-
 import argparse
 import logging
 
-def main():
+from . import helpers
+
+
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--crop_height", help="height of hood section to be cropped in pixels", type=int)
-    parser.add_argument("-r", "--rotation_angle", help="image rotation angle", type=float, default=0)
-    parser.add_argument("-s", "--skip_ocr", help="skip extraction of timestamp using OCR", action="store_true")
-    parser.add_argument("-v", "--validity_check_manual", help="check validity of manual timestamps", action="store_true")
-    parser.add_argument("image", help="images to process", nargs='*')
-    
+    parser.add_argument(
+        "-c",
+        "--crop_height",
+        help="height of hood section to be cropped in pixels",
+        type=int,
+    )
+    parser.add_argument(
+        "-r", "--rotation_angle", help="image rotation angle", type=float, default=0
+    )
+    parser.add_argument(
+        "-s",
+        "--skip_ocr",
+        help="skip extraction of timestamp using OCR",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-v",
+        "--validity_check_manual",
+        help="check validity of manual timestamps",
+        action="store_true",
+    )
+    parser.add_argument("image", help="images to process", nargs="*")
+
     args = parser.parse_args()
 
     # Make -c required unless -v is specified
     if not args.validity_check_manual and args.crop_height is None:
-        parser.error("-c/--crop_height is required unless -v/--validity_check_manual is specified")
+        parser.error(
+            "-c/--crop_height is required unless -v/--validity_check_manual is specified"
+        )
 
     logging.basicConfig(level=logging.DEBUG)
     logging.info(args)
@@ -35,6 +55,7 @@ def main():
         helpers.process_image(imagefile, args.skip_ocr)
 
     helpers.check_invalid_timestamps_found()
+
 
 # TODO hemisphere EW/NS prefixes
 
