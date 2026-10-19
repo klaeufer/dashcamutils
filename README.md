@@ -17,7 +17,9 @@ All other dependencies are Python packages installed automatically: Pillow (crop
 
 ```
 usage: tag_images [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
-                  [-d {auto,mdy,dmy}] [-s] [-v] [--verbose] [image ...]
+                  [-d {auto,mdy,dmy}] [--hemisphere {NW,NE,SW,SE}]
+                  [--repair] [--interpolate] [-s] [-v] [--verbose]
+                  [image ...]
 
   -c, --crop-bottom CROP_BOTTOM
                         pixels to crop from the bottom (e.g., the hood)
@@ -29,6 +31,13 @@ usage: tag_images [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
   -d, --date-order {auto,mdy,dmy}
                         how to read ambiguous nn/nn/yyyy dates; auto
                         (default) infers it from unambiguous stamps
+  --hemisphere {NW,NE,SW,SE}
+                        expected hemispheres of latitude then longitude
+                        (default NW; the camera prints '-' for S and W)
+  --repair              repair misread stamps by fuzzy parsing and checking
+                        them against neighbouring images (capture order)
+  --interpolate         with --repair, estimate time and position of
+                        unreadable stamps from neighbouring images
   -s, --skip_ocr        skip extraction of timestamp using OCR
   -v, --validity_check_manual
                         check validity of manual timestamps
@@ -49,3 +58,21 @@ like `03/04/2022` is read month-first unless you pass `-d dmy`.
 The stamp carries no time zone, so it is assumed to be UTC. If your camera clock is set to
 local time, pass `-z`. The stamp is written to `DateTimeOriginal` as shown, together with
 `OffsetTimeOriginal`, the UTC `GPSDateStamp`/`GPSTimeStamp`, and the file modification time.
+
+## Repairing misread stamps
+
+OCR often garbles a stamp: separators read as digits, letters for digits, a dropped digit.
+With `--repair`, all the images are read first (list them in capture order, e.g. a shell
+glob) and each stamp is parsed tolerantly into several candidate readings. A reading that
+is clean and consistent with its neighbours is trusted; for the others the candidate is
+chosen that keeps time moving forward, the date equal to the batch's, and the distance
+travelled plausible for the elapsed time, and single-digit errors in the coordinates are
+corrected when that makes them fit. Signs follow the camera's `-` for S and W; `--hemisphere`
+says which signs to expect when none is visible, and a reading whose signs contradict it
+needs the neighbours' support to be believed.
+
+Every changed image is listed in `RepairedTimestamps.txt` with what OCR read, so repairs can
+be reviewed. Stamps that remain unusable go to `InvalidTimestamps.txt` as before, unless you
+add `--interpolate`, which estimates their time and position linearly between the nearest
+good neighbours and marks such images in the EXIF `UserComment`. Repair is a heuristic: it
+works best on densely sampled sequences, where neighbours constrain each stamp tightly.

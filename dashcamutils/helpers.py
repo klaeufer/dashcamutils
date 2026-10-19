@@ -12,6 +12,8 @@ import numpy as np
 import piexif
 from PIL import Image
 
+from . import sequence, stamps
+
 # Region of the 1440p frame containing the Garmin timestamp/GPS overlay
 # left, upper, right, lower of the timestamp strip
 TS_CROP_BOX = (10, 1385, 10 + 1150, 1385 + 50)
@@ -31,6 +33,13 @@ class Settings:
     inferred_order: Literal["mdy", "dmy"] = "mdy"
     manual_ts_file: Path = Path("ManualTimestamps.txt")
     invalid_ts_file: Path = Path("InvalidTimestamps.txt")
+    repaired_ts_file: Path = Path("RepairedTimestamps.txt")
+    # expected hemisphere pair of the stamps' coordinates, N/S then E/W; the
+    # camera prints a minus sign for S and W
+    hemisphere: stamps.Hemisphere = "NW"
+    # repair unreadable stamps using neighbouring images (batch mode)
+    repair: bool = False
+    interpolate: bool = False
 
 
 _ocr_engine = None
@@ -242,8 +251,12 @@ def update_metadata(
     when: datetime.datetime,
     location: Gps,
     tz: datetime.tzinfo = datetime.UTC,
+    note: str | None = None,
 ) -> None:
-    """Tag the image; `when` is the stamp's wall-clock time in zone `tz`."""
+    """Tag the image; `when` is the stamp's wall-clock time in zone `tz`.
+
+    `note` is stored in UserComment, e.g. to mark values that were estimated.
+    """
     logging.info(f"{imagefile}: tagging with timestamp and GPS metadata")
     lat, lon, speed = location
     aware = when.replace(tzinfo=tz)
@@ -270,6 +283,10 @@ def update_metadata(
                 piexif.GPSIFD.GPSSpeed: (speed, 1),
             }
         )
+        if note:
+            exif["Exif"][piexif.ExifIFD.UserComment] = b"ASCII\0\0\0" + note.encode(
+                "ascii", "replace"
+            )
         piexif.insert(piexif.dump(exif), imagefile)
         ts = aware.timestamp()
         os.utime(imagefile, (ts, ts))
@@ -341,6 +358,61 @@ def process_image(imagefile: str, settings: Settings, skip_ocr: bool = False) ->
     update_metadata(imagefile, when, location, settings.tz)
     adjust_image(imagefile, settings)
     return True
+
+
+def process_batch(
+    images: list[str], settings: Settings, skip_ocr: bool = False
+) -> bool:
+    """Tag and crop a sequence of images, repairing stamps from their neighbours.
+
+    Images must be in capture order. Returns False if any stamp stayed unusable.
+    """
+    files = [f for f in images if Path(f).is_file()]
+    for f in set(images) - set(files):
+        logging.warning(f"Image file {f} not found, skipping")
+
+    lines = [read_timestamp(f, skip_ocr) for f in files]
+    first: stamps.DateFormat = (
+        "dmy"
+        if settings.date_order == "dmy"
+        or (settings.date_order == "auto" and settings.inferred_order == "dmy")
+        else "mdy"
+    )
+    formats: tuple[stamps.DateFormat, ...] = (
+        ("ymd", first)
+        if settings.date_order != "auto"
+        else ("ymd", first, "dmy" if first == "mdy" else "mdy")
+    )
+    candidates = [
+        stamps.read_candidates(line, formats, settings.hemisphere) for line in lines
+    ]
+    resolved = sequence.resolve(candidates, settings.interpolate)
+
+    ok = True
+    for f, line, r in zip(files, lines, resolved, strict=True):
+        loc = r.location
+        if r.when is None or loc is None:
+            logging.error(
+                f"{f}: unusable timestamp or GPS info {line.rstrip()}, "
+                f"writing to {settings.invalid_ts_file}"
+            )
+            with open(settings.invalid_ts_file, "a", encoding="utf-8") as bad:
+                bad.write(f"{f} {line.rstrip()}\n")
+            ok = False
+            continue
+        note = None
+        if r.status != "ok":
+            fixed = f"GARMIN {r.when:%m/%d/%Y %H:%M:%S} {loc[0]:.5f} {loc[1]:.5f} {loc[2]} MPH"
+            logging.warning(f"{f}: {r.status}: {line.rstrip()!r} -> {fixed}")
+            with open(settings.repaired_ts_file, "a", encoding="utf-8") as audit:
+                audit.write(f"{f} {fixed}  # {r.status}, OCR read: {line.rstrip()}\n")
+            if r.status == "interpolated":
+                note = (
+                    "dashcamutils: time/position interpolated from neighbouring images"
+                )
+        update_metadata(f, r.when, loc, settings.tz, note)
+        adjust_image(f, settings)
+    return ok
 
 
 def process_manual_timestamps(settings: Settings, check_only: bool) -> bool:

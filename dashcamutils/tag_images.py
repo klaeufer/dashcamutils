@@ -51,6 +51,27 @@ def main() -> None:
         default="auto",
     )
     parser.add_argument(
+        "--hemisphere",
+        help="expected hemispheres of the coordinates, latitude then longitude "
+        "(NW default; the camera prints '-' for S and W); used by --repair to "
+        "judge signs",
+        choices=["NW", "NE", "SW", "SE"],
+        default="NW",
+    )
+    parser.add_argument(
+        "--repair",
+        help="repair misread stamps by fuzzy parsing and checking them against "
+        "neighbouring images (images must be in capture order); repairs are "
+        "listed in RepairedTimestamps.txt",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--interpolate",
+        help="with --repair, estimate time and position of unreadable stamps "
+        "from neighbouring images and mark them in EXIF UserComment",
+        action="store_true",
+    )
+    parser.add_argument(
         "-s",
         "--skip_ocr",
         help="skip extraction of timestamp using OCR",
@@ -81,6 +102,9 @@ def main() -> None:
         angle=args.angle,
         tz=args.timezone,
         date_order=args.date_order,
+        hemisphere=args.hemisphere,
+        repair=args.repair or args.interpolate,
+        interpolate=args.interpolate,
     )
 
     if not args.image:
@@ -89,16 +113,17 @@ def main() -> None:
         return
 
     helpers.check_invalid_timestamps_exist(settings)
-    found_invalid = False
-    for imagefile in args.image:
-        if not helpers.process_image(imagefile, settings, args.skip_ocr):
-            found_invalid = True
+    if settings.repair:
+        found_invalid = not helpers.process_batch(args.image, settings, args.skip_ocr)
+    else:
+        found_invalid = False
+        for imagefile in args.image:
+            if not helpers.process_image(imagefile, settings, args.skip_ocr):
+                found_invalid = True
     helpers.check_invalid_timestamps_found(settings, found_invalid)
     if found_invalid:
         sys.exit(1)
 
-
-# TODO hemisphere EW/NS prefixes
 
 # ROTATION = 1.4
 # CROP = 256 # 1080
