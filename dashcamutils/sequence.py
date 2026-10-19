@@ -10,7 +10,6 @@ between anchors.
 import datetime
 import itertools
 import math
-from collections import Counter
 from dataclasses import dataclass
 from typing import Literal
 
@@ -22,6 +21,8 @@ CLEAN_COST = 0.5  # readings at or below this cost are trusted anchors
 MAX_SPEED_MS = 70.0  # ~155 mph; faster between two stamps is implausible
 SLACK_M = 150.0  # GPS jitter and speed variation allowance
 METERS_PER_DEG = 111_320.0
+# Anchors further apart than this say nothing reliable about what lies between
+MAX_INTERPOLATION_GAP = datetime.timedelta(minutes=10)
 
 
 @dataclass(frozen=True)
@@ -105,24 +106,34 @@ def _repair_position(
     return min(options, key=off)
 
 
-def _consensus_date(cands: list[list[Reading]]) -> datetime.date | None:
-    votes = Counter(c[0].when.date() for c in cands if c and c[0].cost <= CLEAN_COST)
-    return votes.most_common(1)[0][0] if votes else None
+def _clean(cs: list[Reading]) -> bool:
+    return bool(cs) and cs[0].cost <= CLEAN_COST
 
 
 def _anchor_times(
     candidates: list[list[Reading]],
 ) -> list[datetime.datetime | None]:
-    """Time of each image's clean reading on the batch's date, else None."""
-    date = _consensus_date(candidates)
-    return [
-        cs[0].when
-        if cs
-        and cs[0].cost <= CLEAN_COST
-        and (date is None or cs[0].when.date() == date)
-        else None
-        for cs in candidates
-    ]
+    """Time of each image's clean reading, else None."""
+    return [cs[0].when if _clean(cs) else None for cs in candidates]
+
+
+def _time_variants(when: datetime.datetime) -> list[datetime.datetime]:
+    """`when` with each single digit of its date and time replaced."""
+    text = when.strftime("%Y%m%d%H%M%S")
+    out = []
+    for i, ch in enumerate(text):
+        for d in "0123456789":
+            if d == ch:
+                continue
+            try:
+                out.append(
+                    datetime.datetime.strptime(
+                        text[:i] + d + text[i + 1 :], "%Y%m%d%H%M%S"
+                    )
+                )
+            except ValueError:
+                continue
+    return out
 
 
 def count_out_of_order(candidates: list[list[Reading]]) -> int:
@@ -154,33 +165,42 @@ def resolve(
 ) -> list[Resolved]:
     """Pick one reading per image, repairing against neighbours."""
     n = len(candidates)
-    date = _consensus_date(candidates)
     out: list[Resolved | None] = [None] * n
 
     def as_resolved(r: Reading, status: Status) -> Resolved:
         return Resolved(r.when, r.lat, r.lon, r.speed or 0, status)
 
-    # pass 1: clean readings that agree with the batch's date are anchors
+    # pass 1: clean readings are anchors
     for i, cs in enumerate(candidates):
-        if (
-            cs
-            and cs[0].cost <= CLEAN_COST
-            and (date is None or cs[0].when.date() == date)
-        ):
+        if _clean(cs):
             out[i] = as_resolved(cs[0], "ok")
 
-    # an apparently clean reading that can't connect to its neighbours (say a
-    # dropped digit moved the longitude thousands of km) is not an anchor
+    # an apparently clean reading that contradicts its neighbours even though
+    # they agree with each other (a dropped digit moved the longitude, or a
+    # misread digit put the date a week off) is not an anchor
     anchors = [i for i, r in enumerate(out) if r is not None]
+    suspect = []
     for k, i in enumerate(anchors):
         r = out[i]
-        before = [out[j] for j in anchors[max(0, k - 2) : k]]
-        after = [out[j] for j in anchors[k + 1 : k + 3]]
-        fits_before = [b for b in before if b and r and _plausible_step(b, r)]
-        fits_after = [a for a in after if a and r and _plausible_step(r, a)]
-        near = len(before) + len(after)
-        if near >= 2 and len(fits_before) + len(fits_after) * 1 < near / 2:
-            out[i] = None
+        if r is None:
+            continue
+        before = [x for j in anchors[max(0, k - 2) : k] if (x := out[j])]
+        after = [x for j in anchors[k + 1 : k + 3] if (x := out[j])]
+        if before and after:
+            b, nx = before[-1], after[0]
+            if _plausible_step(b, nx) and not (
+                _plausible_step(b, r) and _plausible_step(r, nx)
+            ):
+                suspect.append(i)
+        elif len(before) == 2 or len(after) == 2:
+            # at an edge, judge against the two neighbours on the one side
+            side = before or after
+            if _plausible_step(*side) and not any(
+                _plausible_step(x, r) if before else _plausible_step(r, x) for x in side
+            ):
+                suspect.append(i)
+    for i in suspect:
+        out[i] = None
 
     def neighbour(i: int, step: int) -> Resolved | None:
         j = i + step
@@ -198,25 +218,40 @@ def resolve(
         prev, nxt = neighbour(i, -1), neighbour(i, +1)
         full = [c for c in cs if c.location is not None]
         for c in full:
-            if (
-                (date is None or c.when.date() == date)
-                and (prev is None or _plausible_step(prev, c))
-                and (nxt is None or _plausible_step(c, nxt))
+            if (prev is None or _plausible_step(prev, c)) and (
+                nxt is None or _plausible_step(c, nxt)
             ):
                 out[i] = as_resolved(c, "repaired")
                 break
         if out[i] is not None or not full:
             continue
         best = full[0]
-        if date is not None and best.when.date() != date:
-            best = Reading(
-                datetime.datetime.combine(date, best.when.time()),
-                best.lat,
-                best.lon,
-                best.speed,
-                best.cost + 1.0,
-            )
+        # a single misread digit in the date or time can put the reading
+        # outside the window its neighbours allow
+        if (
+            prev is not None
+            and prev.when
+            and best.when < prev.when
+            or (nxt is not None and nxt.when and best.when > nxt.when)
+        ):
+            lo = prev.when if prev and prev.when else None
+            hi = nxt.when if nxt and nxt.when else None
+            fits = [
+                t
+                for t in _time_variants(best.when)
+                if (lo is None or t >= lo) and (hi is None or t <= hi)
+            ]
+            if len(fits) >= 1:
+                target = best.when
+                t = min(fits, key=lambda x: abs((x - target).total_seconds()))
+                best = Reading(t, best.lat, best.lon, best.speed, best.cost + 1.0)
         fixed = _repair_position(best, prev, nxt)
+        if (
+            fixed is None
+            and (prev is None or _plausible_step(prev, best))
+            and (nxt is None or _plausible_step(best, nxt))
+        ):
+            fixed = best
         if fixed and (prev is None or _plausible_step(prev, fixed)):
             out[i] = as_resolved(fixed, "repaired")
 
@@ -267,6 +302,8 @@ def _fill(out: list[Resolved | None], i: int) -> None:
     assert ra is not None and rb is not None
     assert ra.when and rb.when and ra.lat is not None and rb.lat is not None
     assert ra.lon is not None and rb.lon is not None
+    if rb.when - ra.when > MAX_INTERPOLATION_GAP:
+        return
     when = cur.when
     if when is None:
         # spread the gap evenly by image index

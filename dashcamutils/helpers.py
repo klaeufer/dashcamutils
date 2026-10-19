@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -10,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import piexif
-from PIL import Image
+from PIL import Image, ImageOps
 
 from . import sequence, stamps
 
@@ -59,6 +60,38 @@ def _ocr(img: Image.Image) -> str:
     return " ".join(txts or ())
 
 
+def _variants(strip: Image.Image) -> Iterator[Image.Image]:
+    """Preprocessings of the stamp strip, tried in turn when OCR misreads it."""
+    yield strip
+    gray = strip.convert("L")
+    yield ImageOps.autocontrast(gray, cutoff=2).convert("RGB")
+    binary = gray.point(lambda p: 255 if p > 150 else 0).convert("RGB")
+    yield binary
+    yield ImageOps.expand(strip, 20, fill=(0, 0, 0))
+    yield ImageOps.expand(binary, 20, fill=(0, 0, 0))
+    double = gray.resize((gray.width * 2, gray.height * 2), Image.Resampling.LANCZOS)
+    yield ImageOps.autocontrast(double, cutoff=2).convert("RGB")
+
+
+def _ocr_stamp(strip: Image.Image) -> str:
+    """OCR the stamp, retrying with other preprocessings until it parses cleanly.
+
+    RapidOCR is erratic on this overlay: a strip it garbles can read perfectly
+    after a contrast stretch or padding. The first reading with a full,
+    clean-looking stamp wins; otherwise the one needing the least repair does.
+    """
+    best_text, best_cost = "", float("inf")
+    for variant in _variants(strip):
+        text = _ocr(variant)
+        found = stamps.read_candidates(text)
+        cost = found[0].cost if found else float("inf")
+        if cost < best_cost or not best_text:
+            best_text, best_cost = text, cost
+        if best_cost <= sequence.CLEAN_COST:
+            break
+    return best_text
+
+
 def _basename(imagefile: str) -> str:
     return str(Path(imagefile).with_suffix(""))
 
@@ -95,7 +128,7 @@ def read_timestamp(imagefile: str, skip_ocr: bool = False) -> str:
             with Image.open(imagefile) as img:
                 strip = img.crop(TS_CROP_BOX)
             strip.save(tsfile)
-            text = _ocr(strip)
+            text = _ocr_stamp(strip)
             Path(datafile).write_text(text + "\n", encoding="utf-8")
         except Exception as e:
             logging.error(f"{basename}: OCR failed: {e}")
@@ -388,6 +421,16 @@ def process_batch(
     candidates = [
         stamps.read_candidates(line, formats, settings.hemisphere) for line in lines
     ]
+    # the camera writes every stamp of a batch in one format, so lock to it
+    fmt = stamps.detect_format(candidates)
+    if fmt is not None:
+        odd = sum(1 for cs in candidates if cs and cs[0].fmt != fmt)
+        if odd:
+            logging.warning(
+                f"{odd} stamps looked like a different date format than the "
+                f"batch's {fmt}; ignoring those readings"
+            )
+        candidates = stamps.only_format(candidates, fmt)
     backwards = sequence.count_out_of_order(candidates)
     if backwards:
         if settings.sort_by_time:

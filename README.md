@@ -78,7 +78,13 @@ needs the neighbours' support to be believed.
 Every changed image is listed in `RepairedTimestamps.txt` with what OCR read, so repairs can
 be reviewed. Stamps that remain unusable go to `InvalidTimestamps.txt` as before, unless you
 add `--interpolate`, which estimates their time and position linearly between the nearest
-good neighbours and marks such images in the EXIF `UserComment`. Repair assumes the images are listed in capture order; if the readable timestamps run
+good neighbours and marks such images in the EXIF `UserComment`. A batch is assumed to use one date format throughout (as a camera writes them): the format
+most cleanly read stamps agree on is chosen, and readings in any other format are ignored
+with a warning. OCR is also retried on the stamp with a few preprocessings (contrast,
+binarising, padding) when the first reading doesn't parse cleanly. Interpolation is
+not attempted across gaps over 10 minutes.
+
+Repair assumes the images are listed in capture order; if the readable timestamps run
 backwards a warning is logged, and `--sort-by-time` reorders the batch by them instead.
 Repair is a heuristic: it
 works best on densely sampled sequences, where neighbours constrain each stamp tightly.

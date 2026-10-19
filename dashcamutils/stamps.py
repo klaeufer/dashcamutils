@@ -52,6 +52,7 @@ class Reading:
     lon: float | None
     speed: int | None
     cost: float
+    fmt: DateFormat = "ymd"
 
     @property
     def location(self) -> tuple[float, float, int] | None:
@@ -135,7 +136,7 @@ def read_candidates(
     lat_south = hemisphere[0] == "S"
     lon_east = hemisphere[1] == "E"
 
-    found: dict[tuple, Reading] = {}
+    found: dict[tuple, Reading] = {}  # keyed by format too, so they stay distinct
 
     def finish(
         fmt: DateFormat, cost: float, d: int, t: int, la: int, lo: int, lo_len: int
@@ -179,10 +180,10 @@ def read_candidates(
             }.items():
                 when = datetime.datetime.combine(date, time)
                 total = cost + lat_cost + lon_cost
-                key = (when, lat_sign * lat, lon_sign * lon, speed)
+                key = (fmt, when, lat_sign * lat, lon_sign * lon, speed)
                 if key not in found or found[key].cost > total:
                     found[key] = Reading(
-                        when, lat_sign * lat, lon_sign * lon, speed, total
+                        when, lat_sign * lat, lon_sign * lon, speed, total, fmt
                     )
 
     for fmt in formats:
@@ -212,8 +213,38 @@ def read_candidates(
                     time = _make_time(digits[t : t + 6], ampm)
                     if date and time:
                         when = datetime.datetime.combine(date, time)
-                        found[(when, None, None, None)] = Reading(
-                            when, None, None, None, 3.0 + s_d + s_t
+                        found[(fmt, when, None, None, None)] = Reading(
+                            when, None, None, None, 3.0 + s_d + s_t, fmt
                         )
 
     return sorted(found.values(), key=lambda r: r.cost)
+
+
+def detect_format(
+    candidates: list[list[Reading]], clean: float = 0.5
+) -> DateFormat | None:
+    """The date format most clean readings in a batch agree on.
+
+    A camera writes every stamp of a batch the same way, so each clean line votes
+    for the formats it could be (an ambiguous 03/04/2026 votes for both slash
+    orders) and the winner is returned; None if nothing was read cleanly. Ties
+    between the slash orders go to month-first.
+    """
+    votes: dict[DateFormat, int] = dict.fromkeys(ALL_FORMATS, 0)
+    for cs in candidates:
+        for fmt in {c.fmt for c in cs if c.cost <= clean and c.location}:
+            votes[fmt] += 1
+    if not any(votes.values()):
+        return None
+    best: DateFormat = "mdy"
+    for fmt in ("ymd", "dmy"):
+        if votes[fmt] > votes[best]:
+            best = fmt
+    return best
+
+
+def only_format(
+    candidates: list[list[Reading]], fmt: DateFormat
+) -> list[list[Reading]]:
+    """Candidates restricted to readings in format `fmt`."""
+    return [[c for c in cs if c.fmt == fmt] for cs in candidates]

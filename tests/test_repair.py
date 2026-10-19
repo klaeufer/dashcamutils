@@ -71,11 +71,12 @@ def test_unreadable_is_interpolated_only_on_request():
     assert mid.lat is not None and 41.89010 < mid.lat < 41.89014
 
 
-def test_wrong_date_pulled_to_batch_consensus():
+def test_misread_date_digit_repaired_from_neighbours():
     lines = [GOOD.format(s=s, p=s) for s in (10, 11, 12)]
     lines[1] = "GARMIN 03/27/2026 21:14:11 41.89011 -87.66727 30 MPH"
     res = _seq(lines)
     assert res[1].when is not None and res[1].when.day == 21
+    assert res[1].status == "repaired"
 
 
 def test_out_of_order_detected_and_sorted():
@@ -87,3 +88,48 @@ def test_out_of_order_detected_and_sorted():
     order = sequence.time_order(cands)
     assert [shuffled[i] for i in order][0] == lines[0]
     assert sequence.count_out_of_order([cands[i] for i in order]) == 0
+
+
+def test_multi_day_sequence_is_left_alone():
+    lines = [
+        "GARMIN 2026/08/20 21:26:37 42.01252 -87.72069 6 MPH",
+        "GARMIN 2026/09/03 15:10:25 41.92609 -87.81998 0 MPH",
+        "GARMIN 2026/10/10 18:30:16 41.87461 -87.61714 3 MPH",
+    ]
+    res = _seq(lines)
+    assert [r.status for r in res] == ["ok", "ok", "ok"]
+    assert [r.when.date().isoformat() for r in res if r.when] == [
+        "2026-08-20",
+        "2026-09-03",
+        "2026-10-10",
+    ]
+
+
+def test_no_interpolation_across_long_gaps():
+    lines = [
+        "GARMIN 2026/08/20 21:26:37 42.01252 -87.72069 6 MPH",
+        "GARMIN 2026/08/20 21:30:00",
+        "GARMIN 2026/09/03 15:10:25 41.92609 -87.81998 0 MPH",
+    ]
+    assert _seq(lines, interpolate=True)[1].status == "unreadable"
+
+
+def test_batch_format_is_locked_to_the_majority():
+    lines = [GOOD.format(s=s, p=s) for s in (10, 11, 12, 13)]
+    lines[2] = "GARMIN 2026/03/21 21:14:12 41.89012 -87.66727 30 MPH"
+    cands = [stamps.read_candidates(x) for x in lines]
+    assert stamps.detect_format(cands) == "mdy"
+    locked = stamps.only_format(cands, "mdy")
+    assert locked[2] == []
+    assert all(c.fmt == "mdy" for cs in locked for c in cs)
+
+
+def test_ambiguous_date_follows_the_batch():
+    lines = [
+        "GARMIN 23/10/2022 10:31:08 41.87795 -87.62056 26 MPH",
+        "GARMIN 03/04/2022 10:31:09 41.87795 -87.62056 26 MPH",
+    ]
+    cands = [stamps.read_candidates(x) for x in lines]
+    assert stamps.detect_format(cands) == "dmy"
+    locked = stamps.only_format(cands, "dmy")
+    assert locked[1][0].when.month == 4
