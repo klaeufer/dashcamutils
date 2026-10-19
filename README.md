@@ -15,15 +15,15 @@ All other dependencies are Python packages installed automatically: Pillow (crop
 
 # Usage
 
-The command is `dashcamutils`; the earlier name `tag_images` still works as an alias.
+The command is `dashcam-tag`; the earlier name `tag_images` still works as an alias.
 
 ```
-usage: dashcamutils [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
-                    [--gps-time-only | --no-gps-time-only] [-d {auto,mdy,dmy}]
-                    [--hemisphere {NW,NE,SW,SE}] [--repair]
-                    [--interpolate | --no-interpolate] [--sort-by-time] [-s]
-                    [-v] [--verbose]
-                    [image ...]
+usage: dashcam-tag [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
+                   [--gps-time-only | --no-gps-time-only] [-d {auto,mdy,dmy}]
+                   [--hemisphere {NW,NE,SW,SE}] [--repair]
+                   [--interpolate | --no-interpolate] [--sort-by-time] [-s]
+                   [-v] [--verbose]
+                   [image ...]
 
   -c, --crop-bottom CROP_BOTTOM
                         pixels to crop from the bottom (e.g., the hood), or

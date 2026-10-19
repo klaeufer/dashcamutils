@@ -25,7 +25,7 @@ def _auto_or[T](convert: Callable[[str], T]) -> Callable[[str], T | None]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="dashcamutils")
+    parser = argparse.ArgumentParser(prog="dashcam-tag")
     parser.add_argument(
         "-c",
         "--crop-bottom",

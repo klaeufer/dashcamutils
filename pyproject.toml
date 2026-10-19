@@ -23,7 +23,7 @@ dependencies = [
 Homepage = "https://github.com/klaeufer/dashcamutils"
 
 [project.scripts]
-dashcamutils = "dashcamutils.tag_images:main"
+dashcam-tag = "dashcamutils.tag_images:main"
 tag_images = "dashcamutils.tag_images:main"  # former name, kept as an alias
 
 [dependency-groups]

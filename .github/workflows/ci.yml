@@ -73,7 +73,7 @@ jobs:
         run: |
           uv venv /tmp/smoke
           uv pip install --python /tmp/smoke/bin/python dist/*.whl
-          /tmp/smoke/bin/dashcamutils --help
+          /tmp/smoke/bin/dashcam-tag --help
           /tmp/smoke/bin/tag_images --help
       - uses: actions/upload-artifact@v4
         with:
