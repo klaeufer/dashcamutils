@@ -47,6 +47,8 @@ class Settings:
     interpolate: bool = True
     # reorder a batch by its readable timestamps instead of trusting list order
     sort_by_time: bool = False
+    # accept manual entries with a timestamp but no GPS location
+    allow_time_only_manual: bool = False
 
 
 _ocr_engine = None
@@ -416,7 +418,12 @@ def adjust_image(imagefile: str, settings: Settings) -> None:
         logging.error(f"{imagefile}: failed to adjust image: {e}")
 
 
-def process_image(imagefile: str, settings: Settings, skip_ocr: bool = False) -> bool:
+def process_image(
+    imagefile: str,
+    settings: Settings,
+    skip_ocr: bool = False,
+    allow_time_only: bool = False,
+) -> bool:
     """Tag and crop one image. Returns False if its timestamp/GPS was invalid."""
     if not Path(imagefile).is_file():
         logging.warning(f"Image file {imagefile} not found, skipping")
@@ -425,7 +432,7 @@ def process_image(imagefile: str, settings: Settings, skip_ocr: bool = False) ->
     line = read_timestamp(imagefile, skip_ocr)
     when, location = parse_with_settings(line, settings)
 
-    if when is None or location is None:
+    if when is None or (location is None and not allow_time_only):
         logging.error(
             f"{imagefile}: invalid or missing timestamp or GPS info {line.rstrip()}, "
             f"writing to {settings.invalid_ts_file}"
@@ -500,9 +507,7 @@ def process_batch(
     resolved = sequence.resolve(candidates, settings.interpolate)
 
     ok = True
-    for current, (f, line, r) in enumerate(
-        zip(files, lines, resolved, strict=True), 1
-    ):
+    for current, (f, line, r) in enumerate(zip(files, lines, resolved, strict=True), 1):
         logging.info("[%d/%d] writing %s", current, total, f)
         loc = r.location
         if r.when is None:
@@ -552,7 +557,9 @@ def process_manual_timestamps(settings: Settings, check_only: bool) -> ManualRes
             imagefile = parts[0]
             line = parts[1] if len(parts) > 1 else ""
             when, location = parse_with_settings(line, settings)
-            if when is None or location is None:
+            if when is None or (
+                location is None and not settings.allow_time_only_manual
+            ):
                 invalid = True
                 logging.error(
                     f"{imagefile}: invalid timestamp or GPS info {line.rstrip()}"
@@ -562,5 +569,10 @@ def process_manual_timestamps(settings: Settings, check_only: bool) -> ManualRes
             if check_only:
                 continue
             write_timestamp(imagefile, line)
-            process_image(imagefile, settings, True)
+            process_image(
+                imagefile,
+                settings,
+                True,
+                allow_time_only=settings.allow_time_only_manual,
+            )
     return "invalid" if invalid else "valid"

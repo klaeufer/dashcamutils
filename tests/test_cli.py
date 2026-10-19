@@ -72,22 +72,34 @@ def test_settings_summary_shows_hemisphere_for_repair(caplog):
     assert any("expected hemisphere: NW" in record.message for record in caplog.records)
 
 
+def test_settings_summary_reports_time_only_opt_in(caplog):
+    args = argparse.Namespace(crop_bottom=0, angle=0.0, date_order="auto")
+    settings = tag_images.helpers.Settings(allow_time_only_manual=True)
+    with caplog.at_level("INFO"):
+        tag_images._log_settings(args, settings, False)
+    assert any("manual time-only entries: allowed" in r.message for r in caplog.records)
+
+
 def test_normal_progress_counts_only_existing_files(tmp_path, monkeypatch, caplog):
     first = tmp_path / "first.jpg"
     second = tmp_path / "second.jpg"
     first.touch()
     second.touch()
     missing = tmp_path / "missing.jpg"
-    monkeypatch.setattr(sys, "argv", [
-        "dashcam-tag",
-        "-c",
-        "0",
-        "-r",
-        "0",
-        str(first),
-        str(second),
-        str(missing),
-    ])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "dashcam-tag",
+            "-c",
+            "0",
+            "-r",
+            "0",
+            str(first),
+            str(second),
+            str(missing),
+        ],
+    )
     monkeypatch.setattr(
         tag_images.helpers,
         "process_image",

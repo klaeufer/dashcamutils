@@ -64,6 +64,19 @@ Validation returns **0** when every entry is valid, **1** when any entry is inva
 The `--skip_ocr` option reuses each image's per-image text sidecar; it does not read the
 aggregate `ManualTimestamps.txt` file directly.
 
+Manual entries normally require both a timestamp and GPS location. To deliberately recover
+time without coordinates, opt in with `--allow-time-only-manual` for both validation and
+application:
+
+```sh
+dashcam-tag --allow-time-only-manual --validity_check_manual
+dashcam-tag --allow-time-only-manual -z America/Chicago
+```
+
+Time-only entries do not fabricate GPS coordinates or speed. Existing GPS metadata in the
+image is preserved, and local-time EXIF tags are kept when no replacement location is
+supplied. Coordinate-bearing entries continue to behave normally.
+
 ```
 usage: dashcam-tag [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
                    [--gps-time-only | --no-gps-time-only] [-d {auto,mdy,dmy}]

@@ -66,6 +66,11 @@ def _log_settings(
     logging.info("  GPS time only: %s", "yes" if settings.gps_time_only else "no")
     if settings.repair:
         logging.info("  expected hemisphere: %s", settings.hemisphere)
+    if settings.allow_time_only_manual:
+        logging.info(
+            "  manual time-only entries: allowed; existing GPS is preserved and "
+            "local-time EXIF tags are kept when no location is supplied"
+        )
     logging.info(
         "  originals: EXIF metadata and file timestamps change; local-time EXIF "
         "tags are removed when a location is available"
@@ -164,6 +169,13 @@ def main() -> None:
         help="check validity of manual timestamps",
         action="store_true",
     )
+    parser.add_argument(
+        "--allow-time-only-manual",
+        help="with ManualTimestamps.txt, accept valid timestamps without GPS; "
+        "existing GPS metadata is preserved and local-time EXIF tags are kept",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
     parser.add_argument("--verbose", help="enable debug logging", action="store_true")
     parser.add_argument("image", help="images to process", nargs="*")
 
@@ -182,6 +194,7 @@ def main() -> None:
         repair=args.repair,
         interpolate=args.interpolate,
         sort_by_time=args.sort_by_time,
+        allow_time_only_manual=args.allow_time_only_manual,
     )
 
     if not args.image and not settings.manual_ts_file.is_file():
