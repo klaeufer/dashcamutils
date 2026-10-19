@@ -48,6 +48,22 @@ With no image arguments, the tool processes `ManualTimestamps.txt` in the curren
 directory if it exists. If neither images nor that file are supplied, it prints usage and an
 example, exits with status **2**, and performs no processing.
 
+### Manual recovery
+
+When processing reports invalid timestamps, use this workflow:
+
+1. Find the entries in `InvalidTimestamps.txt`.
+2. Copy them to `ManualTimestamps.txt` and edit the timestamp/GPS text as needed.
+3. Validate the file without modifying images or OCR sidecars:
+   `dashcam-tag --validity_check_manual`.
+4. Apply valid entries with `dashcam-tag`, preserving the same `--timezone` and other
+   relevant processing options used for the original batch.
+
+Validation returns **0** when every entry is valid, **1** when any entry is invalid, and
+**2** when `--validity_check_manual` is requested but `ManualTimestamps.txt` is missing.
+The `--skip_ocr` option reuses each image's per-image text sidecar; it does not read the
+aggregate `ManualTimestamps.txt` file directly.
+
 ```
 usage: dashcam-tag [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
                    [--gps-time-only | --no-gps-time-only] [-d {auto,mdy,dmy}]

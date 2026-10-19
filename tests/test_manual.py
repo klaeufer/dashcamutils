@@ -5,7 +5,7 @@ from dashcamutils import helpers
 
 def test_manual_file_missing(tmp_path):
     s = helpers.Settings(manual_ts_file=tmp_path / "none.txt")
-    assert helpers.process_manual_timestamps(s, True) is False
+    assert helpers.process_manual_timestamps(s, True) == "missing"
 
 
 def test_manual_check_only_handles_blank_and_bad_lines(tmp_path, caplog):
@@ -18,9 +18,21 @@ def test_manual_check_only_handles_blank_and_bad_lines(tmp_path, caplog):
     )
     s = helpers.Settings(manual_ts_file=f)
     with caplog.at_level(logging.INFO):
-        assert helpers.process_manual_timestamps(s, True) is True
+        assert helpers.process_manual_timestamps(s, True) == "invalid"
     errors = [r.message for r in caplog.records if r.levelno == logging.ERROR]
     assert len(errors) == 2
+
+
+def test_manual_check_only_valid(tmp_path):
+    f = tmp_path / "ManualTimestamps.txt"
+    f.write_text(
+        "a.JPG GARMIN 2021/03/10 21:23:30 41.87074 -87.61696 35 MPH\n",
+        encoding="utf-8",
+    )
+    assert (
+        helpers.process_manual_timestamps(helpers.Settings(manual_ts_file=f), True)
+        == "valid"
+    )
 
 
 def test_invalid_stamps_hint_at_repair(caplog):

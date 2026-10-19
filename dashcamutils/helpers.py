@@ -21,6 +21,7 @@ TS_CROP_BOX = (10, 1385, 10 + 1150, 1385 + 50)
 
 
 type DateOrder = Literal["auto", "mdy", "dmy"]
+type ManualResult = Literal["missing", "valid", "invalid"]
 
 
 @dataclass
@@ -114,7 +115,10 @@ def check_invalid_timestamps_found(settings: Settings, found: bool) -> None:
             f"please check {settings.invalid_ts_file}"
         )
         logging.error(
-            f"Then rename to {settings.manual_ts_file}, fix manually, and rerun"
+            "Recovery steps: (1) find the failure report; (2) copy its entries "
+            f"to {settings.manual_ts_file} and edit them; (3) validate with "
+            "dashcam-tag --validity_check_manual; (4) apply valid entries with "
+            "dashcam-tag, preserving the same --timezone and other options"
         )
         if not settings.repair:
             logging.error(
@@ -526,12 +530,13 @@ def manual_timestamp_images(settings: Settings) -> list[str]:
         return [p[0] for line in manual_ts if (p := line.split(maxsplit=1))]
 
 
-def process_manual_timestamps(settings: Settings, check_only: bool) -> bool:
-    """Process the manual timestamps file. Returns False if it doesn't exist."""
+def process_manual_timestamps(settings: Settings, check_only: bool) -> ManualResult:
+    """Process the manual timestamps file and report whether entries are valid."""
     if not settings.manual_ts_file.is_file():
-        return False
+        return "missing"
 
     logging.warning("Found manual timestamps, processing only the corresponding images")
+    invalid = False
     with open(settings.manual_ts_file, encoding="utf-8") as manual_ts:
         for raw_line in manual_ts:
             parts = raw_line.split(maxsplit=1)
@@ -541,6 +546,7 @@ def process_manual_timestamps(settings: Settings, check_only: bool) -> bool:
             line = parts[1] if len(parts) > 1 else ""
             when, location = parse_with_settings(line, settings)
             if when is None or location is None:
+                invalid = True
                 logging.error(
                     f"{imagefile}: invalid timestamp or GPS info {line.rstrip()}"
                 )
@@ -550,4 +556,4 @@ def process_manual_timestamps(settings: Settings, check_only: bool) -> bool:
                 continue
             write_timestamp(imagefile, line)
             process_image(imagefile, settings, True)
-    return True
+    return "invalid" if invalid else "valid"

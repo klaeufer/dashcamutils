@@ -38,6 +38,42 @@ def _nonnegative_int(value: str) -> int:
     return number
 
 
+def _log_settings(
+    args: argparse.Namespace,
+    settings: helpers.Settings,
+    validation_only: bool,
+) -> None:
+    crop = (
+        f"explicit {args.crop_bottom}px"
+        if args.crop_bottom is not None
+        else "automatic (detected from the batch)"
+    )
+    angle = (
+        f"explicit {args.angle:g}°"
+        if args.angle is not None
+        else "automatic (detected from the batch)"
+    )
+    date_order = (
+        f"explicit {args.date_order}"
+        if args.date_order != "auto"
+        else "automatic (month-first fallback until detected)"
+    )
+    logging.info("Effective processing settings:")
+    logging.info("  crop bottom: %s", crop)
+    logging.info("  rotation: %s", angle)
+    logging.info("  camera timezone: %s", settings.tz)
+    logging.info("  date order: %s", date_order)
+    logging.info("  GPS time only: %s", "yes" if settings.gps_time_only else "no")
+    if settings.repair:
+        logging.info("  expected hemisphere: %s", settings.hemisphere)
+    logging.info(
+        "  originals: EXIF metadata and file timestamps change; local-time EXIF "
+        "tags are removed when a location is available"
+    )
+    if validation_only:
+        logging.info("  validation mode: no images or OCR sidecars will be modified")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="dashcam-tag")
     parser.add_argument(
@@ -170,9 +206,14 @@ def main() -> None:
                 for f in found[first:end]:
                     settings.mounts[f] = (c, a)
 
+    _log_settings(args, settings, args.validity_check_manual)
+
     if not args.image:
-        if helpers.process_manual_timestamps(settings, args.validity_check_manual):
-            sys.exit(2)
+        result = helpers.process_manual_timestamps(settings, args.validity_check_manual)
+        if result == "missing":
+            sys.exit(2 if args.validity_check_manual else 0)
+        if result == "invalid":
+            sys.exit(1)
         return
 
     helpers.check_invalid_timestamps_exist(settings)

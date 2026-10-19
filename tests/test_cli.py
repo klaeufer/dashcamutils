@@ -51,3 +51,22 @@ def test_existing_manual_file_is_still_processed(tmp_path, monkeypatch):
     )
 
     tag_images.main()
+
+
+def test_settings_summary_hides_hemisphere_without_repair(caplog):
+    args = argparse.Namespace(crop_bottom=0, angle=0.0, date_order="auto")
+    settings = tag_images.helpers.Settings()
+    with caplog.at_level("INFO"):
+        tag_images._log_settings(args, settings, False)
+    messages = [record.message for record in caplog.records]
+    assert any("explicit 0px" in message for message in messages)
+    assert any("explicit 0°" in message for message in messages)
+    assert any("month-first fallback" in message for message in messages)
+    assert not any("expected hemisphere" in message for message in messages)
+
+
+def test_settings_summary_shows_hemisphere_for_repair(caplog):
+    args = argparse.Namespace(crop_bottom=None, angle=None, date_order="dmy")
+    with caplog.at_level("INFO"):
+        tag_images._log_settings(args, tag_images.helpers.Settings(repair=True), False)
+    assert any("expected hemisphere: NW" in record.message for record in caplog.records)
