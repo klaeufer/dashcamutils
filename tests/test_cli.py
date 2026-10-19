@@ -17,6 +17,21 @@ def test_crop_value_accepts_zero_and_positive():
     assert tag_images._nonnegative_int("123") == 123
 
 
+def test_default_logging_threshold_is_warning(monkeypatch):
+    configured = {}
+    monkeypatch.setattr(
+        tag_images.logging,
+        "basicConfig",
+        lambda **kwargs: configured.update(kwargs),
+    )
+
+    tag_images._configure_logging(False)
+    assert configured["level"] == tag_images.logging.WARNING
+
+    tag_images._configure_logging(True)
+    assert configured["level"] == tag_images.logging.DEBUG
+
+
 def test_empty_input_exits_before_autofit(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv", ["dashcam-tag"])

@@ -48,6 +48,9 @@ With no image arguments, the tool processes `ManualTimestamps.txt` in the curren
 directory if it exists. If neither images nor that file are supplied, it prints usage and an
 example, exits with status **2**, and performs no processing.
 
+Routine CLI output shows warnings and errors by default. Use `--verbose` when you want
+informational details such as effective settings, per-image progress, and OCR/repair phases.
+
 ### Manual recovery
 
 When processing reports invalid timestamps, use this workflow:

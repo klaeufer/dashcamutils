@@ -38,6 +38,10 @@ def _nonnegative_int(value: str) -> int:
     return number
 
 
+def _configure_logging(verbose: bool) -> None:
+    logging.basicConfig(level=logging.DEBUG if verbose else logging.WARNING)
+
+
 def _log_settings(
     args: argparse.Namespace,
     settings: helpers.Settings,
@@ -181,7 +185,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+    _configure_logging(args.verbose)
     logging.debug(args)
 
     settings = helpers.Settings(
