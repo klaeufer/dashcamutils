@@ -1,3 +1,6 @@
+[![CI](https://github.com/klaeufer/dashcamutils/actions/workflows/ci.yml/badge.svg)](https://github.com/klaeufer/dashcamutils/actions/workflows/ci.yml)
+
+
 # Purpose
 
 The current line of Garmin dash cams include a timestamp and GPS information visually in the image.
