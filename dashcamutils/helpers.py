@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import re
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -52,6 +53,17 @@ class Settings:
 
 
 _ocr_engine = None
+_ocr_verbose = False
+
+
+def configure_ocr_logging(verbose: bool) -> None:
+    """Set RapidOCR's independent logger to match the CLI verbosity."""
+    global _ocr_verbose
+    _ocr_verbose = verbose
+
+
+def _progress(message: str, *args: object) -> None:
+    print(message % args, file=sys.stderr, flush=True)
 
 
 def _ocr(img: Image.Image) -> str:
@@ -59,6 +71,12 @@ def _ocr(img: Image.Image) -> str:
     global _ocr_engine
     if _ocr_engine is None:
         from rapidocr import RapidOCR
+        from rapidocr.utils.log import logger as rapidocr_logger
+
+        level = logging.DEBUG if _ocr_verbose else logging.WARNING
+        rapidocr_logger.setLevel(level)
+        for handler in rapidocr_logger.handlers:
+            handler.setLevel(level)
 
         _ocr_engine = RapidOCR()
     result = _ocr_engine(np.array(img.convert("RGB")))
@@ -112,18 +130,18 @@ def check_invalid_timestamps_exist(settings: Settings) -> None:
 
 def check_invalid_timestamps_found(settings: Settings, found: bool) -> None:
     if found:
-        logging.error(
+        logging.warning(
             "Found one or more invalid timestamps, "
             f"please check {settings.invalid_ts_file}"
         )
-        logging.error(
+        logging.warning(
             "Recovery steps: (1) find the failure report; (2) copy its entries "
             f"to {settings.manual_ts_file} and edit them; (3) validate with "
             "dashcam-tag --validity_check_manual; (4) apply valid entries with "
             "dashcam-tag, preserving the same --timezone and other options"
         )
         if not settings.repair:
-            logging.error(
+            logging.warning(
                 "Or try --repair, which fixes misread stamps from neighbouring "
                 "images (list the images in capture order)"
             )
@@ -433,7 +451,7 @@ def process_image(
     when, location = parse_with_settings(line, settings)
 
     if when is None or (location is None and not allow_time_only):
-        logging.error(
+        logging.warning(
             f"{imagefile}: invalid or missing timestamp or GPS info {line.rstrip()}, "
             f"writing to {settings.invalid_ts_file}"
         )
@@ -462,7 +480,7 @@ def process_batch(
     total = len(files)
     lines = []
     for current, f in enumerate(files, 1):
-        logging.info("[%d/%d] OCR-reading %s", current, total, f)
+        _progress("[%d/%d] reading stamps %s", current, total, f)
         lines.append(read_timestamp(f, skip_ocr))
     first: stamps.DateFormat = (
         "dmy"
@@ -508,10 +526,10 @@ def process_batch(
 
     ok = True
     for current, (f, line, r) in enumerate(zip(files, lines, resolved, strict=True), 1):
-        logging.info("[%d/%d] writing %s", current, total, f)
+        _progress("[%d/%d] applying results %s", current, total, f)
         loc = r.location
         if r.when is None:
-            logging.error(
+            logging.warning(
                 f"{f}: unusable timestamp {line.rstrip()}, "
                 f"writing to {settings.invalid_ts_file}"
             )
@@ -561,7 +579,7 @@ def process_manual_timestamps(settings: Settings, check_only: bool) -> ManualRes
                 location is None and not settings.allow_time_only_manual
             ):
                 invalid = True
-                logging.error(
+                logging.warning(
                     f"{imagefile}: invalid timestamp or GPS info {line.rstrip()}"
                 )
                 continue

@@ -48,8 +48,11 @@ With no image arguments, the tool processes `ManualTimestamps.txt` in the curren
 directory if it exists. If neither images nor that file are supplied, it prints usage and an
 example, exits with status **2**, and performs no processing.
 
-Routine CLI output shows warnings and errors by default. Use `--verbose` when you want
-informational details such as effective settings, per-image progress, and OCR/repair phases.
+Routine CLI output shows warnings and errors by default. Per-image progress remains visible
+on stderr. Use `--verbose` when you want informational details such as effective settings,
+additional processing diagnostics, and RapidOCR initialization messages. Recoverable
+timestamp/GPS parsing skips are warnings and still produce a nonzero exit status; errors are
+reserved for operational failures such as OCR, metadata, or output-write failures.
 
 ### Manual recovery
 

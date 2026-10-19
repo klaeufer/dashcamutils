@@ -32,6 +32,17 @@ def test_default_logging_threshold_is_warning(monkeypatch):
     assert configured["level"] == tag_images.logging.DEBUG
 
 
+def test_configure_logging_also_configures_ocr(monkeypatch):
+    levels = []
+    monkeypatch.setattr(tag_images.logging, "basicConfig", lambda **kwargs: None)
+    monkeypatch.setattr(tag_images.helpers, "configure_ocr_logging", levels.append)
+
+    tag_images._configure_logging(False)
+    tag_images._configure_logging(True)
+
+    assert levels == [False, True]
+
+
 def test_empty_input_exits_before_autofit(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(sys, "argv", ["dashcam-tag"])
@@ -95,7 +106,9 @@ def test_settings_summary_reports_time_only_opt_in(caplog):
     assert any("manual time-only entries: allowed" in r.message for r in caplog.records)
 
 
-def test_normal_progress_counts_only_existing_files(tmp_path, monkeypatch, caplog):
+def test_normal_progress_counts_only_existing_files(
+    tmp_path, monkeypatch, caplog, capsys
+):
     first = tmp_path / "first.jpg"
     second = tmp_path / "second.jpg"
     first.touch()
@@ -122,7 +135,8 @@ def test_normal_progress_counts_only_existing_files(tmp_path, monkeypatch, caplo
     )
     with caplog.at_level("INFO"):
         tag_images.main()
+    progress = capsys.readouterr().err.splitlines()
     messages = [record.getMessage() for record in caplog.records]
-    assert messages.count(f"[1/2] processing {first}") == 1
-    assert messages.count(f"[2/2] processing {second}") == 1
+    assert f"[1/2] processing {first}" in progress
+    assert f"[2/2] processing {second}" in progress
     assert any(f"Image file {missing} not found" in message for message in messages)

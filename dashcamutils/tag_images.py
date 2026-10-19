@@ -40,6 +40,7 @@ def _nonnegative_int(value: str) -> int:
 
 def _configure_logging(verbose: bool) -> None:
     logging.basicConfig(level=logging.DEBUG if verbose else logging.WARNING)
+    helpers.configure_ocr_logging(verbose)
 
 
 def _log_settings(
@@ -243,7 +244,11 @@ def main() -> None:
         found_invalid = False
         total = len(files)
         for current, imagefile in enumerate(files, 1):
-            logging.info("[%d/%d] processing %s", current, total, imagefile)
+            print(
+                f"[{current}/{total}] processing {imagefile}",
+                file=sys.stderr,
+                flush=True,
+            )
             if not helpers.process_image(imagefile, settings, args.skip_ocr):
                 found_invalid = True
     helpers.check_invalid_timestamps_found(settings, found_invalid)

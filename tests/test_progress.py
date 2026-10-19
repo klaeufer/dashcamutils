@@ -1,7 +1,9 @@
 from dashcamutils import helpers
 
 
-def test_repair_progress_has_read_and_write_phases(tmp_path, monkeypatch, caplog):
+def test_repair_progress_has_read_and_write_phases(
+    tmp_path, monkeypatch, caplog, capsys
+):
     files = [tmp_path / "first.jpg", tmp_path / "second.jpg"]
     for imagefile in files:
         imagefile.touch()
@@ -21,8 +23,9 @@ def test_repair_progress_has_read_and_write_phases(tmp_path, monkeypatch, caplog
         )
 
     messages = [record.getMessage() for record in caplog.records]
-    assert f"[1/2] OCR-reading {files[0]}" in messages
-    assert f"[2/2] OCR-reading {files[1]}" in messages
-    assert f"[1/2] writing {files[0]}" in messages
-    assert f"[2/2] writing {files[1]}" in messages
+    progress = capsys.readouterr().err
+    assert f"[1/2] reading stamps {files[0]}" in progress
+    assert f"[2/2] reading stamps {files[1]}" in progress
+    assert f"[1/2] applying results {files[0]}" in progress
+    assert f"[2/2] applying results {files[1]}" in progress
     assert any(f"Image file {missing} not found" in message for message in messages)

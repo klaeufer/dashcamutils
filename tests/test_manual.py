@@ -19,8 +19,12 @@ def test_manual_check_only_handles_blank_and_bad_lines(tmp_path, caplog):
     s = helpers.Settings(manual_ts_file=f)
     with caplog.at_level(logging.INFO):
         assert helpers.process_manual_timestamps(s, True) == "invalid"
-    errors = [r.message for r in caplog.records if r.levelno == logging.ERROR]
-    assert len(errors) == 2
+    warnings = [
+        r.message
+        for r in caplog.records
+        if r.levelno == logging.WARNING and "invalid timestamp" in r.message
+    ]
+    assert len(warnings) == 2
 
 
 def test_manual_check_only_valid(tmp_path):
