@@ -114,7 +114,8 @@ log files are appended to, so they accumulate duplicate lines.
 ## Repairing misread stamps
 
 OCR often garbles a stamp: separators read as digits, letters for digits, a dropped digit.
-With `--repair`, all the images are read first (list them in capture order, e.g. a shell
+Without `--repair`, a stamp that can't be parsed is reported and the image skipped, and the
+tool suggests `--repair` when that happens. With `--repair`, all the images are read first (list them in capture order, e.g. a shell
 glob) and each stamp is parsed tolerantly into several candidate readings. A reading that
 is clean and consistent with its neighbours is trusted; for the others the candidate is
 chosen that keeps time moving forward, the date equal to the batch's, and the distance

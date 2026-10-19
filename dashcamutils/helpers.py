@@ -116,6 +116,11 @@ def check_invalid_timestamps_found(settings: Settings, found: bool) -> None:
         logging.error(
             f"Then rename to {settings.manual_ts_file}, fix manually, and rerun"
         )
+        if not settings.repair:
+            logging.error(
+                "Or try --repair, which fixes misread stamps from neighbouring "
+                "images (list the images in capture order)"
+            )
 
 
 def read_timestamp(imagefile: str, skip_ocr: bool = False) -> str:
