@@ -18,6 +18,14 @@ It then crops the image to remove the timestamp and usually the vehicle hood.
 
 All other dependencies are Python packages installed automatically: Pillow (cropping/rotation), RapidOCR (OCR; downloads its models on first use), and piexif (EXIF metadata).
 
+# Installation
+
+Install the latest release from [PyPI](https://pypi.org/project/dashcamutils/):
+
+```
+python -m pip install dashcamutils
+```
+
 # Usage
 
 The command is `dashcam-tag`; the earlier name `tag_images` still works as an alias.
