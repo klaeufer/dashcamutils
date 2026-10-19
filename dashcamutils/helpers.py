@@ -27,6 +27,7 @@ type DateOrder = Literal["auto", "mdy", "dmy"]
 class Settings:
     crop_bottom: int = 0
     angle: float = 0
+    gps_time_only: bool = False
     # per-image (crop, angle) when the camera moved within the batch
     mounts: dict[str, tuple[int, float]] = field(default_factory=dict)
     # zone the camera clock is set to; stamps carry no zone of their own
@@ -283,16 +284,34 @@ def _offset_string(moment: datetime.datetime) -> str:
     return f"{sign}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
 
 
+LOCAL_TIME_EXIF_TAGS = (
+    piexif.ExifIFD.DateTimeOriginal,
+    piexif.ExifIFD.DateTimeDigitized,
+    piexif.ExifIFD.OffsetTime,
+    piexif.ExifIFD.OffsetTimeOriginal,
+    piexif.ExifIFD.OffsetTimeDigitized,
+    piexif.ExifIFD.SubSecTime,
+    piexif.ExifIFD.SubSecTimeOriginal,
+    piexif.ExifIFD.SubSecTimeDigitized,
+)
+
+
 def update_metadata(
     imagefile: str,
     when: datetime.datetime,
     location: Gps | None,
     tz: datetime.tzinfo = datetime.UTC,
     note: str | None = None,
+    gps_time_only: bool = False,
 ) -> None:
     """Tag the image; `when` is the stamp's wall-clock time in zone `tz`.
 
     With no `location` only the time is written.
+
+    With `gps_time_only` (and a location) the local-time tags are removed, leaving
+    just the UTC GPS date and time, so that Google Photos works out the time zone
+    from the position. Without a location they are kept, as there is nothing to
+    infer a zone from.
 
     `note` is stored in UserComment, e.g. to mark values that were estimated.
     """
@@ -327,6 +346,10 @@ def update_metadata(
                     piexif.GPSIFD.GPSSpeed: (speed, 1),
                 }
             )
+        if gps_time_only and location is not None:
+            for tag in LOCAL_TIME_EXIF_TAGS:
+                exif["Exif"].pop(tag, None)
+            exif["0th"].pop(piexif.ImageIFD.DateTime, None)
         if note:
             exif["Exif"][piexif.ExifIFD.UserComment] = b"ASCII\0\0\0" + note.encode(
                 "ascii", "replace"
@@ -402,7 +425,9 @@ def process_image(imagefile: str, settings: Settings, skip_ocr: bool = False) ->
             invalid_ts.write(f"{imagefile} {line.rstrip()}\n")
         return False
 
-    update_metadata(imagefile, when, location, settings.tz)
+    update_metadata(
+        imagefile, when, location, settings.tz, gps_time_only=settings.gps_time_only
+    )
     adjust_image(imagefile, settings)
     return True
 
@@ -483,7 +508,7 @@ def process_batch(
                 audit.write(f"{f} {fixed}  # {r.status}, OCR read: {line.rstrip()}\n")
             if r.status == "interpolated":
                 note = "dashcamutils: position interpolated from neighbouring images"
-        update_metadata(f, r.when, loc, settings.tz, note)
+        update_metadata(f, r.when, loc, settings.tz, note, settings.gps_time_only)
         adjust_image(f, settings)
     return ok
 

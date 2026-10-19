@@ -55,6 +55,13 @@ def main() -> None:
         default=datetime.UTC,
     )
     parser.add_argument(
+        "--gps-time-only",
+        help="write the time only as UTC GPS date/time and remove the local-time "
+        "tags, so Google Photos infers the time zone from the location "
+        "(images without a location keep their local-time tags)",
+        action="store_true",
+    )
+    parser.add_argument(
         "-d",
         "--date-order",
         help="how to read ambiguous nn/nn/yyyy dates; auto (default) infers it "
@@ -116,6 +123,7 @@ def main() -> None:
         crop_bottom=args.crop_bottom or 0,
         angle=args.angle or 0.0,
         tz=args.timezone,
+        gps_time_only=args.gps_time_only,
         date_order=args.date_order,
         hemisphere=args.hemisphere,
         repair=args.repair,

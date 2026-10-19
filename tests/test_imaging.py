@@ -109,3 +109,26 @@ def test_parse_timezone(name, offset):
 def test_parse_timezone_rejects_unknown():
     with pytest.raises(ValueError):
         helpers.parse_timezone("Mars/Olympus")
+
+
+def test_gps_time_only_removes_local_time_tags(tmp_path):
+    f = tmp_path / "a.jpg"
+    Image.new("RGB", (20, 20)).save(f)
+    when = datetime.datetime(2021, 3, 10, 21, 23, 30)
+    helpers.update_metadata(str(f), when, (41.0, -87.0, 1))
+    helpers.update_metadata(str(f), when, (41.0, -87.0, 1), gps_time_only=True)
+    exif = piexif.load(str(f))
+    for tag in helpers.LOCAL_TIME_EXIF_TAGS:
+        assert tag not in exif["Exif"]
+    assert piexif.ImageIFD.DateTime not in exif["0th"]
+    assert exif["GPS"][piexif.GPSIFD.GPSDateStamp] == b"2021:03:10"
+    assert exif["GPS"][piexif.GPSIFD.GPSTimeStamp][0] == (21, 1)
+
+
+def test_gps_time_only_keeps_time_without_location(tmp_path):
+    f = tmp_path / "a.jpg"
+    Image.new("RGB", (20, 20)).save(f)
+    when = datetime.datetime(2021, 3, 10, 21, 23, 30)
+    helpers.update_metadata(str(f), when, None, gps_time_only=True)
+    exif = piexif.load(str(f))
+    assert exif["Exif"][piexif.ExifIFD.DateTimeOriginal] == b"2021:03:10 21:23:30"
