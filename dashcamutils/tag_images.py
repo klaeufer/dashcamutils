@@ -4,8 +4,10 @@ import argparse
 import datetime
 import logging
 import sys
+from collections.abc import Callable
+from pathlib import Path
 
-from . import helpers
+from . import autofit, helpers
 
 
 def _timezone(name: str) -> datetime.tzinfo:
@@ -15,6 +17,13 @@ def _timezone(name: str) -> datetime.tzinfo:
         raise argparse.ArgumentTypeError(str(e)) from e
 
 
+def _auto_or[T](convert: Callable[[str], T]) -> Callable[[str], T | None]:
+    def parse(value: str) -> T | None:
+        return None if value.lower() == "auto" else convert(value)
+
+    return parse
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -22,17 +31,20 @@ def main() -> None:
         "--crop-bottom",
         "--crop_height",
         dest="crop_bottom",
-        help="pixels to crop from the bottom (e.g., the hood)",
-        type=int,
+        help="pixels to crop from the bottom (e.g., the hood), or auto (default) "
+        "to detect the hood from the whole batch",
+        type=_auto_or(int),
+        default=None,
     )
     parser.add_argument(
         "-r",
         "--angle",
         "--rotation_angle",
         dest="angle",
-        help="rotation in degrees counterclockwise, as in PIL.Image.rotate",
-        type=float,
-        default=0,
+        help="rotation in degrees counterclockwise, as in PIL.Image.rotate, or "
+        "auto (default) to estimate the camera tilt from the whole batch",
+        type=_auto_or(float),
+        default=None,
     )
     parser.add_argument(
         "-z",
@@ -94,18 +106,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Make -c required unless -v is specified
-    if not args.validity_check_manual and args.crop_bottom is None:
-        parser.error(
-            "-c/--crop-bottom is required unless -v/--validity_check_manual is specified"
-        )
-
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.debug(args)
 
     settings = helpers.Settings(
         crop_bottom=args.crop_bottom or 0,
-        angle=args.angle,
+        angle=args.angle or 0.0,
         tz=args.timezone,
         date_order=args.date_order,
         hemisphere=args.hemisphere,
@@ -113,6 +119,14 @@ def main() -> None:
         interpolate=args.interpolate,
         sort_by_time=args.sort_by_time,
     )
+
+    if not args.validity_check_manual and (
+        args.crop_bottom is None or args.angle is None
+    ):
+        images = args.image or helpers.manual_timestamp_images(settings)
+        settings.crop_bottom, settings.angle = autofit.fit(
+            [f for f in images if Path(f).is_file()], args.crop_bottom, args.angle
+        )
 
     if not args.image:
         if helpers.process_manual_timestamps(settings, args.validity_check_manual):

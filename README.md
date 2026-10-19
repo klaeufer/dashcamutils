@@ -22,9 +22,11 @@ usage: tag_images [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
                   [image ...]
 
   -c, --crop-bottom CROP_BOTTOM
-                        pixels to crop from the bottom (e.g., the hood)
+                        pixels to crop from the bottom (e.g., the hood), or
+                        auto (default) to detect the hood from the batch
   -r, --angle ANGLE     rotation in degrees counterclockwise, as in
-                        PIL.Image.rotate
+                        PIL.Image.rotate, or auto (default) to estimate the
+                        camera tilt from the batch
   -z, --timezone TIMEZONE
                         time zone the camera clock is set to: UTC (default),
                         an offset like -05:00, or a name like America/Chicago
@@ -80,3 +82,18 @@ good neighbours and marks such images in the EXIF `UserComment`. Repair assumes 
 backwards a warning is logged, and `--sort-by-time` reorders the batch by them instead.
 Repair is a heuristic: it
 works best on densely sampled sequences, where neighbours constrain each stamp tightly.
+
+## Automatic hood crop and rotation
+
+Unless you pass `-c` and `-r`, both are estimated once from the whole batch (up to 40
+evenly spaced images, at least 5) and logged, so you can reuse the values explicitly.
+
+- **Hood (`-c auto`)**: the hood is the part of the frame that stays put while the scenery
+  changes, so the crop is the static band at the bottom, plus a small margin. It needs
+  a moving car with varied scenery; if the scene barely changes (parked) or the static
+  region is implausibly large, no cropping is done.
+- **Tilt (`-r auto`)**: the camera's roll is found by searching for the rotation that
+  lines up the scene's vertical edges (trunks, poles, buildings) best. It is only applied when
+  most images show clear vertical structure and agree; otherwise there is a warning and no rotation. Dense
+  forest or winding roads often give too little to go on, so check the result and pass `-r`
+  yourself if it declines or looks wrong.

@@ -433,6 +433,14 @@ def process_batch(
     return ok
 
 
+def manual_timestamp_images(settings: Settings) -> list[str]:
+    """Image files named in the manual timestamps file."""
+    if not settings.manual_ts_file.is_file():
+        return []
+    with open(settings.manual_ts_file, encoding="utf-8") as manual_ts:
+        return [p[0] for line in manual_ts if (p := line.split(maxsplit=1))]
+
+
 def process_manual_timestamps(settings: Settings, check_only: bool) -> bool:
     """Process the manual timestamps file. Returns False if it doesn't exist."""
     if not settings.manual_ts_file.is_file():
