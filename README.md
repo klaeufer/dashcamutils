@@ -18,7 +18,7 @@ All other dependencies are Python packages installed automatically: Pillow (crop
 ```
 usage: tag_images [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
                   [-d {auto,mdy,dmy}] [--hemisphere {NW,NE,SW,SE}]
-                  [--repair] [--interpolate] [-s] [-v] [--verbose]
+                  [--repair] [--interpolate] [--sort-by-time] [-s] [-v] [--verbose]
                   [image ...]
 
   -c, --crop-bottom CROP_BOTTOM
@@ -38,6 +38,8 @@ usage: tag_images [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
                         them against neighbouring images (capture order)
   --interpolate         with --repair, estimate time and position of
                         unreadable stamps from neighbouring images
+  --sort-by-time        with --repair, process images in the order of their
+                        readable timestamps rather than the order given
   -s, --skip_ocr        skip extraction of timestamp using OCR
   -v, --validity_check_manual
                         check validity of manual timestamps
@@ -74,5 +76,7 @@ needs the neighbours' support to be believed.
 Every changed image is listed in `RepairedTimestamps.txt` with what OCR read, so repairs can
 be reviewed. Stamps that remain unusable go to `InvalidTimestamps.txt` as before, unless you
 add `--interpolate`, which estimates their time and position linearly between the nearest
-good neighbours and marks such images in the EXIF `UserComment`. Repair is a heuristic: it
+good neighbours and marks such images in the EXIF `UserComment`. Repair assumes the images are listed in capture order; if the readable timestamps run
+backwards a warning is logged, and `--sort-by-time` reorders the batch by them instead.
+Repair is a heuristic: it
 works best on densely sampled sequences, where neighbours constrain each stamp tightly.

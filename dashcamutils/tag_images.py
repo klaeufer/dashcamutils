@@ -72,6 +72,12 @@ def main() -> None:
         action="store_true",
     )
     parser.add_argument(
+        "--sort-by-time",
+        help="with --repair, process images in the order of their readable "
+        "timestamps rather than the order given",
+        action="store_true",
+    )
+    parser.add_argument(
         "-s",
         "--skip_ocr",
         help="skip extraction of timestamp using OCR",
@@ -105,6 +111,7 @@ def main() -> None:
         hemisphere=args.hemisphere,
         repair=args.repair or args.interpolate,
         interpolate=args.interpolate,
+        sort_by_time=args.sort_by_time,
     )
 
     if not args.image:

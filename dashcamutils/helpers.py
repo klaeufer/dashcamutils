@@ -40,6 +40,8 @@ class Settings:
     # repair unreadable stamps using neighbouring images (batch mode)
     repair: bool = False
     interpolate: bool = False
+    # reorder a batch by its readable timestamps instead of trusting list order
+    sort_by_time: bool = False
 
 
 _ocr_engine = None
@@ -386,6 +388,22 @@ def process_batch(
     candidates = [
         stamps.read_candidates(line, formats, settings.hemisphere) for line in lines
     ]
+    backwards = sequence.count_out_of_order(candidates)
+    if backwards:
+        if settings.sort_by_time:
+            order = sequence.time_order(candidates)
+            logging.warning(
+                f"images were out of time order ({backwards} backward steps); sorted by timestamp"
+            )
+            files = [files[i] for i in order]
+            lines = [lines[i] for i in order]
+            candidates = [candidates[i] for i in order]
+        else:
+            logging.warning(
+                f"{backwards} readable timestamps run backwards in the image order; "
+                "repair assumes capture order, so results may be poor "
+                "(use --sort-by-time to reorder by timestamp)"
+            )
     resolved = sequence.resolve(candidates, settings.interpolate)
 
     ok = True

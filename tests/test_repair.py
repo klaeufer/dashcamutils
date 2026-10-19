@@ -76,3 +76,14 @@ def test_wrong_date_pulled_to_batch_consensus():
     lines[1] = "GARMIN 03/27/2026 21:14:11 41.89011 -87.66727 30 MPH"
     res = _seq(lines)
     assert res[1].when is not None and res[1].when.day == 21
+
+
+def test_out_of_order_detected_and_sorted():
+    lines = [GOOD.format(s=s, p=s) for s in (10, 11, 12, 13)]
+    lines[1] = "GARMIN 03/21/2026 21:14:11"  # unreadable GPS, follows 10
+    shuffled = [lines[2], lines[0], lines[1], lines[3]]
+    cands = [stamps.read_candidates(x) for x in shuffled]
+    assert sequence.count_out_of_order(cands) == 1
+    order = sequence.time_order(cands)
+    assert [shuffled[i] for i in order][0] == lines[0]
+    assert sequence.count_out_of_order([cands[i] for i in order]) == 0

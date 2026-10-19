@@ -110,6 +110,45 @@ def _consensus_date(cands: list[list[Reading]]) -> datetime.date | None:
     return votes.most_common(1)[0][0] if votes else None
 
 
+def _anchor_times(
+    candidates: list[list[Reading]],
+) -> list[datetime.datetime | None]:
+    """Time of each image's clean reading on the batch's date, else None."""
+    date = _consensus_date(candidates)
+    return [
+        cs[0].when
+        if cs
+        and cs[0].cost <= CLEAN_COST
+        and (date is None or cs[0].when.date() == date)
+        else None
+        for cs in candidates
+    ]
+
+
+def count_out_of_order(candidates: list[list[Reading]]) -> int:
+    """How many times the clean readings' times step backwards in list order."""
+    times = [t for t in _anchor_times(candidates) if t is not None]
+    return sum(b < a for a, b in itertools.pairwise(times))
+
+
+def time_order(candidates: list[list[Reading]]) -> list[int]:
+    """Indices that put the images in time order.
+
+    Images with a clean reading are sorted by it; the others keep their place
+    relative to the nearest earlier anchor (or the first anchor, if none).
+    """
+    times = _anchor_times(candidates)
+    known = [t for t in times if t is not None]
+    if not known:
+        return list(range(len(candidates)))
+    keys: list[datetime.datetime] = []
+    current = next(t for t in times if t is not None)
+    for t in times:
+        current = t or current
+        keys.append(current)
+    return sorted(range(len(candidates)), key=lambda i: (keys[i], i))
+
+
 def resolve(
     candidates: list[list[Reading]], interpolate: bool = False
 ) -> list[Resolved]:
