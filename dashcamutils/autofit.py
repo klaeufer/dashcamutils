@@ -14,6 +14,7 @@ import numpy as np
 from PIL import Image
 
 SAMPLE_FRAMES = 40
+SEGMENT_FRAMES = 120  # frames examined when looking for a mid-batch camera shift
 WORK_WIDTH = 640
 MIN_FRAMES = 5
 
@@ -21,6 +22,9 @@ MIN_FRAMES = 5
 HOOD_SEARCH_TOP, HOOD_SEARCH_BOTTOM = 0.55, 0.95
 HOOD_MIN_FIT = 0.6  # share of profile variance a hood/scenery step must explain
 HOOD_MARGIN = 0.0
+MIN_SEGMENT = 8  # frames a stretch needs before it can have its own hood crop
+MIN_SHIFT = 0.02  # hood edge move, as a share of image height, that counts as a shift
+SHIFT_GAIN = 0.05  # how much better two crops must fit than one
 
 # Angle
 MAX_TILT = 8.0  # degrees searched on either side of upright
@@ -32,13 +36,13 @@ CONFIDENT = 1.5
 
 
 def _load_gray(
-    paths: Sequence[str], width: int = WORK_WIDTH
+    paths: Sequence[str], width: int = WORK_WIDTH, limit: int = SAMPLE_FRAMES
 ) -> tuple[np.ndarray, tuple[int, int]]:
     """Stack of downscaled grayscale frames, plus the full image size."""
-    step = max(1, len(paths) // SAMPLE_FRAMES)
+    step = max(1, len(paths) // limit)
     frames = []
     size = (0, 0)
-    for p in paths[::step][:SAMPLE_FRAMES]:
+    for p in paths[::step][:limit]:
         with Image.open(p) as img:
             if size == (0, 0):
                 size = img.size
@@ -87,9 +91,8 @@ def _hood_split(stack: np.ndarray) -> tuple[int, float]:
     return lo + best_k, fit
 
 
-def estimate_hood_crop(paths: Sequence[str]) -> int | None:
-    """Pixels to remove from the bottom to drop the hood, or None if unsure."""
-    stack, (_, full_h) = _load_gray(paths)
+def _hood_crop(stack: np.ndarray, full_h: int) -> int | None:
+    """Hood crop from a stack of frames: None if unknowable, 0 if no hood found."""
     if len(stack) < MIN_FRAMES:
         logging.warning(f"hood detection needs at least {MIN_FRAMES} images")
         return None
@@ -107,6 +110,43 @@ def estimate_hood_crop(paths: Sequence[str]) -> int | None:
         )
         return 0
     return round((1 - row / h + HOOD_MARGIN) * full_h)
+
+
+def estimate_hood_crop(paths: Sequence[str]) -> int | None:
+    """Pixels to remove from the bottom to drop the hood, or None if unsure."""
+    stack, (_, full_h) = _load_gray(paths)
+    return _hood_crop(stack, full_h)
+
+
+def _find_shifts(stack: np.ndarray, offset: int = 0) -> list[int]:
+    """Frame indices where the hood edge jumps, found by recursive best split."""
+    n = len(stack)
+    if n < 2 * MIN_SEGMENT:
+        return []
+    h = stack.shape[1]
+    if float(np.median(stack.std(axis=0)[: h // 2])) < 8:
+        return []
+    _, whole = _hood_split(stack)
+    best: tuple[float, int] | None = None
+    for k in range(MIN_SEGMENT, n - MIN_SEGMENT + 1):
+        row_l, fit_l = _hood_split(stack[:k])
+        row_r, fit_r = _hood_split(stack[k:])
+        score = min(fit_l, fit_r)
+        if (
+            score >= HOOD_MIN_FIT
+            and score > whole + SHIFT_GAIN
+            and abs(row_l - row_r) / h >= MIN_SHIFT
+            and (best is None or score > best[0])
+        ):
+            best = (score, k)
+    if best is None:
+        return []
+    k = best[1]
+    return (
+        _find_shifts(stack[:k], offset)
+        + [offset + k]
+        + _find_shifts(stack[k:], offset + k)
+    )
 
 
 def _edge_energy(gx: np.ndarray, tilt: float) -> float:
@@ -145,6 +185,10 @@ def estimate_angle(paths: Sequence[str]) -> float | None:
     Returns None when the frames do not agree on a tilt.
     """
     stack, _ = _load_gray(paths)
+    return _angle(stack)
+
+
+def _angle(stack: np.ndarray) -> float | None:
     if len(stack) < MIN_FRAMES:
         logging.warning(f"angle detection needs at least {MIN_FRAMES} images")
         return None
@@ -187,3 +231,34 @@ def fit(
             )
         angle = found_angle or 0.0
     return crop, angle
+
+
+def fit_segments(
+    paths: Sequence[str], crop: int | None, angle: float | None
+) -> list[tuple[int, int, float]]:
+    """Like `fit`, but notices when the camera moved partway through the batch.
+
+    Returns (first image index, crop, angle) for each stretch of images that shares
+    a mounting, in order. Shifts are only looked for when the crop is automatic, and
+    their position is accurate to the sampling step (a few images in a long batch).
+    """
+    if crop is not None or len(paths) < 2 * MIN_SEGMENT:
+        c, a = fit(paths, crop, angle)
+        return [(0, c, a)]
+    step = max(1, len(paths) // SEGMENT_FRAMES)
+    stack, (_, full_h) = _load_gray(paths, limit=SEGMENT_FRAMES)
+    starts = [0] + [k * step for k in _find_shifts(stack)]
+    if len(starts) == 1:
+        c, a = fit(paths, crop, angle)
+        return [(0, c, a)]
+    logging.warning(
+        f"the camera seems to have moved: {len(starts)} stretches of images "
+        f"starting at images {[s + 1 for s in starts]}; fitting each separately"
+    )
+    ends = starts[1:] + [len(paths)]
+    out = []
+    for first, end in zip(starts, ends, strict=True):
+        logging.info(f"images {first + 1}-{end}:")
+        c, a = fit(paths[first:end], None, angle)
+        out.append((first, c, a))
+    return out

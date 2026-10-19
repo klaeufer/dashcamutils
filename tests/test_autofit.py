@@ -20,18 +20,25 @@ def _scene(rng: np.random.Generator, tilt: float = 0.0) -> Image.Image:
     return img.rotate(tilt, resample=Image.Resampling.BICUBIC, fillcolor=150)
 
 
-def _sequence(tmp_path, tilt: float = 0.0, n: int = 10, hood: bool = False):
+def _sequence(
+    tmp_path,
+    tilt: float = 0.0,
+    n: int = 10,
+    hood: bool = False,
+    top: int = HOOD_TOP,
+    start: int = 0,
+):
     rng = np.random.default_rng(3)
     yy = np.arange(H)[:, None]
     xx = np.arange(W)[None, :]
     # a curved hood: highest in the middle
-    mask = yy > HOOD_TOP + 0.0004 * (xx - W / 2) ** 2
+    mask = yy > top + 0.0004 * (xx - W / 2) ** 2
     paths = []
     for k in range(n):
         arr = np.asarray(_scene(rng, tilt)).copy()
         if hood:
             arr[mask] = 30
-        p = tmp_path / f"f{k}.png"
+        p = tmp_path / f"f{start + k:03d}.png"
         Image.fromarray(arr).save(p)
         paths.append(str(p))
     return paths
@@ -67,3 +74,18 @@ def test_angle_corrects_tilt(tmp_path, tilt):
 def test_fit_keeps_explicit_values_and_falls_back(tmp_path):
     assert autofit.fit([], 120, 1.5) == (120, 1.5)
     assert autofit.fit([], None, None) == (0, 0.0)
+
+
+def test_steady_camera_is_one_stretch(tmp_path):
+    paths = _sequence(tmp_path, n=24, hood=True)
+    stretches = autofit.fit_segments(paths, None, 0.0)
+    assert len(stretches) == 1
+
+
+def test_camera_shift_gets_separate_crops(tmp_path):
+    first = _sequence(tmp_path, n=12, hood=True)
+    second = _sequence(tmp_path, n=12, hood=True, top=480, start=12)
+    stretches = autofit.fit_segments(first + second, None, 0.0)
+    assert [s[0] for s in stretches] == [0, 12]
+    assert H - HOOD_TOP - 10 <= stretches[0][1] <= H - HOOD_TOP + 15
+    assert H - 480 - 10 <= stretches[1][1] <= H - 480 + 15

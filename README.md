@@ -110,6 +110,10 @@ evenly spaced images, at least 5) and logged, so you can reuse the values explic
   changes less than the scenery, even when it is dark and reflective). The crop is
   everything below that step. It needs a moving car with varied scenery and at least
   5 images; if the scene barely changes (parked) or no clear step is found, no cropping is done.
+- **Camera moved mid-batch**: with `-c auto`, the batch is also checked for a jump in
+  the hood edge (for example the camera got knocked between drives). If one is found, a
+  warning lists where, and each stretch gets its own crop and tilt. The split point is
+  accurate to a few images in very long batches. An explicit `-c` disables this.
 - **Tilt (`-r auto`)**: the camera's roll is found by searching for the rotation that
   lines up the scene's vertical edges (trunks, poles, buildings) best. It is only applied when
   most images show clear vertical structure and agree; otherwise there is a warning and no rotation. Dense

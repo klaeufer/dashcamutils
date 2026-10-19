@@ -127,9 +127,14 @@ def main() -> None:
         args.crop_bottom is None or args.angle is None
     ):
         images = args.image or helpers.manual_timestamp_images(settings)
-        settings.crop_bottom, settings.angle = autofit.fit(
-            [f for f in images if Path(f).is_file()], args.crop_bottom, args.angle
-        )
+        found = [f for f in images if Path(f).is_file()]
+        stretches = autofit.fit_segments(found, args.crop_bottom, args.angle)
+        _, settings.crop_bottom, settings.angle = stretches[0]
+        if len(stretches) > 1:
+            ends = [s[0] for s in stretches[1:]] + [len(found)]
+            for (first, c, a), end in zip(stretches, ends, strict=True):
+                for f in found[first:end]:
+                    settings.mounts[f] = (c, a)
 
     if not args.image:
         if helpers.process_manual_timestamps(settings, args.validity_check_manual):

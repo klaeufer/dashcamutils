@@ -4,7 +4,7 @@ import math
 import os
 import re
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -27,6 +27,8 @@ type DateOrder = Literal["auto", "mdy", "dmy"]
 class Settings:
     crop_bottom: int = 0
     angle: float = 0
+    # per-image (crop, angle) when the camera moved within the batch
+    mounts: dict[str, tuple[int, float]] = field(default_factory=dict)
     # zone the camera clock is set to; stamps carry no zone of their own
     tz: datetime.tzinfo = datetime.UTC
     # how to read ambiguous nn/nn/yyyy dates; "auto" infers it from the batch
@@ -363,13 +365,16 @@ def adjust_image(imagefile: str, settings: Settings) -> None:
     try:
         with Image.open(imagefile) as img:
             exif = img.info.get("exif")
+            crop, angle = settings.mounts.get(
+                imagefile, (settings.crop_bottom, settings.angle)
+            )
             out = img
             box = (0, 0, *img.size)
-            if settings.angle:
-                out = img.rotate(settings.angle, resample=Image.Resampling.BICUBIC)
-                box = _inscribed_box(*img.size, settings.angle)
+            if angle:
+                out = img.rotate(angle, resample=Image.Resampling.BICUBIC)
+                box = _inscribed_box(*img.size, angle)
             left, top, right, bottom = box
-            bottom -= settings.crop_bottom
+            bottom -= crop
             if bottom <= top:
                 raise ValueError("crop_bottom leaves no image")
             out = out.crop((left, top, right, bottom))
