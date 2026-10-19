@@ -1,4 +1,9 @@
-[![CI](https://github.com/klaeufer/dashcamutils/actions/workflows/ci.yml/badge.svg)](https://github.com/klaeufer/dashcamutils/actions/workflows/ci.yml)
+[![CI](https://github.com/klaeufer/dashcamutils/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/klaeufer/dashcamutils/actions/workflows/ci.yml?query=branch%3Amain)
+[![CodeQL](https://github.com/klaeufer/dashcamutils/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/klaeufer/dashcamutils/actions/workflows/codeql.yml?query=branch%3Amain)
+[![Actionlint](https://github.com/klaeufer/dashcamutils/actions/workflows/actionlint.yml/badge.svg?branch=main)](https://github.com/klaeufer/dashcamutils/actions/workflows/actionlint.yml?query=branch%3Amain)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/github/license/klaeufer/dashcamutils)](https://github.com/klaeufer/dashcamutils/blob/main/LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/klaeufer/dashcamutils/main)](https://github.com/klaeufer/dashcamutils/commits/main)
 
 
 # Purpose
