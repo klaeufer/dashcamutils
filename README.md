@@ -105,10 +105,11 @@ works best on densely sampled sequences, where neighbours constrain each stamp t
 Unless you pass `-c` and `-r`, both are estimated once from the whole batch (up to 40
 evenly spaced images, at least 5) and logged, so you can reuse the values explicitly.
 
-- **Hood (`-c auto`)**: the hood is the part of the frame that stays put while the scenery
-  changes, so the crop is the static band at the bottom, plus a small margin. It needs
-  a moving car with varied scenery; if the scene barely changes (parked) or the static
-  region is implausibly large, no cropping is done.
+- **Hood (`-c auto`)**: the hood's crest shows up as a step, in the central columns, in
+  both average brightness and how much the picture changes from frame to frame (the hood
+  changes less than the scenery, even when it is dark and reflective). The crop is
+  everything below that step. It needs a moving car with varied scenery and at least
+  5 images; if the scene barely changes (parked) or no clear step is found, no cropping is done.
 - **Tilt (`-r auto`)**: the camera's roll is found by searching for the rotation that
   lines up the scene's vertical edges (trunks, poles, buildings) best. It is only applied when
   most images show clear vertical structure and agree; otherwise there is a warning and no rotation. Dense

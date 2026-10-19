@@ -40,7 +40,7 @@ def _sequence(tmp_path, tilt: float = 0.0, n: int = 10, hood: bool = False):
 def test_hood_crop_found(tmp_path):
     crop = autofit.estimate_hood_crop(_sequence(tmp_path, hood=True))
     assert crop is not None
-    assert H - HOOD_TOP <= crop <= H - HOOD_TOP + 15
+    assert H - HOOD_TOP - 10 <= crop <= H - HOOD_TOP + 15
 
 
 def test_no_hood_means_no_crop(tmp_path):

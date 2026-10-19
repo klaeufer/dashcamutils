@@ -17,10 +17,10 @@ SAMPLE_FRAMES = 40
 WORK_WIDTH = 640
 MIN_FRAMES = 5
 
-# Hood: a row counts as hood if enough of its pixels are static across frames
-STATIC_ROW_FRACTION = 0.1
-MAX_HOOD_FRACTION = 0.4  # more than this of the frame is implausible
-HOOD_MARGIN = 0.01  # of image height, to clear the antialiased edge
+# Hood: searched for in this band of the frame (the stamp sits below it)
+HOOD_SEARCH_TOP, HOOD_SEARCH_BOTTOM = 0.55, 0.95
+HOOD_MIN_FIT = 0.6  # share of profile variance a hood/scenery step must explain
+HOOD_MARGIN = 0.0
 
 # Angle
 MAX_TILT = 8.0  # degrees searched on either side of upright
@@ -52,30 +52,61 @@ def _load_gray(
     return np.stack(frames), size
 
 
+def _hood_split(stack: np.ndarray) -> tuple[int, float]:
+    """Row where the hood starts, and how well a hood/scenery split fits (0 to 1).
+
+    Down the central columns, where the hood crest is highest, the hood differs
+    from the scenery in two ways that hold up even for a dark, reflective hood:
+    it keeps a different average brightness, and it varies less over time. We fit
+    a two-level step to both profiles and keep the best row.
+    """
+    h, w = stack.shape[1:]
+    centre = slice(w * 3 // 10, w * 7 // 10)
+    brightness = stack[:, :, centre].mean(axis=0).mean(axis=1)
+    variability = stack[:, :, centre].std(axis=0).mean(axis=1)
+    lo, hi = int(h * HOOD_SEARCH_TOP), int(h * HOOD_SEARCH_BOTTOM)
+    feats = []
+    for prof in (brightness, variability):
+        seg = prof[lo:hi]
+        spread = float(seg.std())
+        feats.append((seg - seg.mean()) / spread if spread > 1e-6 else seg * 0)
+    x = np.stack(feats, axis=1)
+    n = len(x)
+    # sum of squares within each side of every candidate split, from cumulative sums
+    cs = np.vstack([np.zeros(x.shape[1]), np.cumsum(x, axis=0)])
+    cs2 = np.vstack([np.zeros(x.shape[1]), np.cumsum(x * x, axis=0)])
+    best_k, best_sse = 0, float("inf")
+    total = float((cs2[n] - cs[n] ** 2 / n).sum())
+    for k in range(int(n * 0.05), int(n * 0.95)):
+        left = cs2[k] - cs[k] ** 2 / k
+        right = (cs2[n] - cs2[k]) - (cs[n] - cs[k]) ** 2 / (n - k)
+        sse = float((left + right).sum())
+        if sse < best_sse:
+            best_k, best_sse = k, sse
+    fit = 1 - best_sse / total if total > 0 else 0.0
+    return lo + best_k, fit
+
+
 def estimate_hood_crop(paths: Sequence[str]) -> int | None:
     """Pixels to remove from the bottom to drop the hood, or None if unsure."""
     stack, (_, full_h) = _load_gray(paths)
     if len(stack) < MIN_FRAMES:
         logging.warning(f"hood detection needs at least {MIN_FRAMES} images")
         return None
+    h = stack.shape[1]
     # a parked car sees a static scene everywhere, so nothing can be told apart
-    std = stack.std(axis=0)
-    h = std.shape[0]
-    scene = float(np.median(std[: h // 2]))
+    scene = float(np.median(stack.std(axis=0)[: h // 2]))
     if scene < 8:
         logging.warning("scenery barely changes between images; cannot find the hood")
         return None
-    static = std < max(4.0, 0.2 * scene)
-    frac = static.mean(axis=1)
-    rows = 0
-    for y in range(h - 1, -1, -1):
-        if frac[y] < STATIC_ROW_FRACTION:
-            break
-        rows += 1
-    if rows / h > MAX_HOOD_FRACTION:
-        logging.warning("static region too large to be a hood; not cropping")
-        return None
-    return round((rows / h + HOOD_MARGIN) * full_h) if rows else 0
+    row, fit = _hood_split(stack)
+    logging.debug(f"hood split at row {row}/{h}, fit {fit:.2f}")
+    if fit < HOOD_MIN_FIT:
+        logging.warning(
+            f"no clear hood edge found (fit {fit:.2f}); not cropping (use -c)"
+        )
+        return 0
+    return round((1 - row / h + HOOD_MARGIN) * full_h)
 
 
 def _edge_energy(gx: np.ndarray, tilt: float) -> float:
