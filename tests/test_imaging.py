@@ -1,7 +1,9 @@
 import datetime
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import piexif
+import pytest
 from PIL import Image, ImageDraw
 
 from dashcamutils import helpers
@@ -22,7 +24,7 @@ def test_metadata_roundtrip(tmp_path):
     assert exif["GPS"][piexif.GPSIFD.GPSLongitudeRef] == b"W"
     assert exif["GPS"][piexif.GPSIFD.GPSLatitude][:2] == ((41, 1), (52, 1))
     assert exif["GPS"][piexif.GPSIFD.GPSSpeed] == (35, 1)
-    assert f.stat().st_mtime == when.timestamp()
+    assert f.stat().st_mtime == when.replace(tzinfo=datetime.UTC).timestamp()
 
 
 def test_adjust_image_crops_and_keeps_exif(tmp_path):
@@ -67,3 +69,43 @@ def test_positive_angle_is_counterclockwise(tmp_path):
         ys, _ = np.nonzero(np.asarray(out.convert("L")) < 50)
         # the right-hand bar moves up (smaller y) when rotated counterclockwise
         assert ys.mean() < out.height / 2
+
+
+def test_timezone_written_and_applied(tmp_path):
+    f = tmp_path / "a.jpg"
+    _jpeg(f)
+    when = datetime.datetime(2021, 3, 10, 21, 23, 30)
+    chicago = ZoneInfo("America/Chicago")
+    helpers.update_metadata(str(f), when, (41.0, -87.0, 1), chicago)
+    exif = piexif.load(str(f))
+    assert exif["Exif"][piexif.ExifIFD.DateTimeOriginal] == b"2021:03:10 21:23:30"
+    assert exif["Exif"][piexif.ExifIFD.OffsetTimeOriginal] == b"-06:00"
+    assert exif["GPS"][piexif.GPSIFD.GPSDateStamp] == b"2021:03:11"
+    assert exif["GPS"][piexif.GPSIFD.GPSTimeStamp] == ((3, 1), (23, 1), (30, 1))
+    assert f.stat().st_mtime == when.replace(tzinfo=chicago).timestamp()
+
+
+def test_default_timezone_is_utc(tmp_path):
+    f = tmp_path / "a.jpg"
+    _jpeg(f)
+    when = datetime.datetime(2021, 3, 10, 21, 23, 30)
+    helpers.update_metadata(str(f), when, (41.0, -87.0, 1))
+    exif = piexif.load(str(f))
+    assert exif["Exif"][piexif.ExifIFD.OffsetTimeOriginal] == b"+00:00"
+    assert exif["GPS"][piexif.GPSIFD.GPSTimeStamp] == ((21, 1), (23, 1), (30, 1))
+    assert f.stat().st_mtime == when.replace(tzinfo=datetime.UTC).timestamp()
+
+
+@pytest.mark.parametrize(
+    "name, offset",
+    [("UTC", 0), ("-05:00", -300), ("+0530", 330), ("America/Chicago", None)],
+)
+def test_parse_timezone(name, offset):
+    tz = helpers.parse_timezone(name)
+    if offset is not None:
+        assert tz.utcoffset(None) == datetime.timedelta(minutes=offset)
+
+
+def test_parse_timezone_rejects_unknown():
+    with pytest.raises(ValueError):
+        helpers.parse_timezone("Mars/Olympus")

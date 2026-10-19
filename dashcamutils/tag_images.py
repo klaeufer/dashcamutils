@@ -1,10 +1,18 @@
 #!/usr/bin/env python
 
 import argparse
+import datetime
 import logging
 import sys
 
 from . import helpers
+
+
+def _timezone(name: str) -> datetime.tzinfo:
+    try:
+        return helpers.parse_timezone(name)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from e
 
 
 def main() -> None:
@@ -25,6 +33,22 @@ def main() -> None:
         help="rotation in degrees counterclockwise, as in PIL.Image.rotate",
         type=float,
         default=0,
+    )
+    parser.add_argument(
+        "-z",
+        "--timezone",
+        help="time zone the camera clock is set to: UTC (default), an offset "
+        "like -05:00, or a name like America/Chicago",
+        type=_timezone,
+        default=datetime.UTC,
+    )
+    parser.add_argument(
+        "-d",
+        "--date-order",
+        help="how to read ambiguous nn/nn/yyyy dates; auto (default) infers it "
+        "from unambiguous stamps, e.g. 23/10/2022",
+        choices=["auto", "mdy", "dmy"],
+        default="auto",
     )
     parser.add_argument(
         "-s",
@@ -52,7 +76,12 @@ def main() -> None:
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.debug(args)
 
-    settings = helpers.Settings(crop_bottom=args.crop_bottom or 0, angle=args.angle)
+    settings = helpers.Settings(
+        crop_bottom=args.crop_bottom or 0,
+        angle=args.angle,
+        tz=args.timezone,
+        date_order=args.date_order,
+    )
 
     if not args.image:
         if helpers.process_manual_timestamps(settings, args.validity_check_manual):

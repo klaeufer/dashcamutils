@@ -5,6 +5,8 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import piexif
@@ -15,10 +17,18 @@ from PIL import Image
 TS_CROP_BOX = (10, 1385, 10 + 1150, 1385 + 50)
 
 
+type DateOrder = Literal["auto", "mdy", "dmy"]
+
+
 @dataclass
 class Settings:
     crop_bottom: int = 0
     angle: float = 0
+    # zone the camera clock is set to; stamps carry no zone of their own
+    tz: datetime.tzinfo = datetime.UTC
+    # how to read ambiguous nn/nn/yyyy dates; "auto" infers it from the batch
+    date_order: DateOrder = "auto"
+    inferred_order: Literal["mdy", "dmy"] = "mdy"
     manual_ts_file: Path = Path("ManualTimestamps.txt")
     invalid_ts_file: Path = Path("InvalidTimestamps.txt")
 
@@ -103,59 +113,98 @@ def write_timestamp(imagefile: str, line: str) -> None:
 
 invalid_chars = ")—Z+_'°=\"<>}~"
 
-# Define all possible timestamp formats
-TS_FORMATS = [
-    (
-        re.compile(
-            "(\\d{4})/(\\d{2})/(\\d{2}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d)"
-        ),
-        "%Y%m%d%H%M%S",
-    ),
-    (
-        re.compile(
-            "(\\d{2})/(\\d{2})/(\\d{4}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d) (AM|PM)"
-        ),
-        "%m%d%Y%I%M%S%p",
-    ),
-    (
-        re.compile(
-            "(\\d{2})/(\\d{2})/(\\d{4}).?([012]\\d)[:27 ]{0,2}([012345]\\d)[:27 ]{0,2}([012345]\\d)"
-        ),
-        "%m%d%Y%H%M%S",
-    ),
-]
+# The separators between time fields are often misread by OCR (':' as '2' or '7')
+_TIME = r".?([012]\d)[:27 ]{0,2}([012345]\d)[:27 ]{0,2}([012345]\d)"
+YMD_RE = re.compile(r"(\d{4})/(\d{2})/(\d{2})" + _TIME)
+# nn/nn/yyyy is month-first or day-first depending on the camera's setting
+SLASH_RE = re.compile(r"(\d{2})/(\d{2})/(\d{4})" + _TIME + r"(?: (AM|PM))?")
 
 gps = re.compile("(\\d{2})[.-]*(\\d{5}).{0,2}-?(\\d{2,3})[.-]*(\\d{5})[. ]*(\\d*)")
 
 type Gps = tuple[float, float, int]
 
 
-def parse_timestamp(line: str) -> tuple[datetime.datetime | None, Gps | None]:
+def _build(
+    year: str, month: str, day: str, hms: tuple[str, ...], ampm: str | None
+) -> datetime.datetime | None:
+    try:
+        if ampm:
+            try:
+                return datetime.datetime.strptime(
+                    f"{year}{month}{day}{''.join(hms)}{ampm}", "%Y%m%d%I%M%S%p"
+                )
+            except ValueError:
+                pass  # e.g. hour 13-23 with a spurious AM/PM
+        return datetime.datetime.strptime(
+            f"{year}{month}{day}{''.join(hms)}", "%Y%m%d%H%M%S"
+        )
+    except ValueError:
+        return None
+
+
+def _parse(
+    line: str, date_order: DateOrder, prefer: Literal["mdy", "dmy"]
+) -> tuple[datetime.datetime | None, Gps | None, Literal["mdy", "dmy"] | None]:
+    """Parse a stamp; the last result is the order if the line settled it."""
     for ch in invalid_chars:
         line = line.replace(ch, "")
 
-    g = gps.search(line)
-    location: Gps | None = None
     when: datetime.datetime | None = None
+    settled: Literal["mdy", "dmy"] | None = None
 
-    for ts_regex, ts_format in TS_FORMATS:
-        t = ts_regex.search(line)
-        if not t:
-            continue
+    if t := YMD_RE.search(line):
+        when = _build(*t.group(1, 2, 3), t.group(4, 5, 6), None)
+    elif t := SLASH_RE.search(line):
+        first, second, year = t.group(1, 2, 3)
+        hms, ampm = t.group(4, 5, 6), t.group(7)
+        candidates: dict[Literal["mdy", "dmy"], datetime.datetime | None] = {
+            "mdy": _build(year, first, second, hms, ampm),
+            "dmy": _build(year, second, first, hms, ampm),
+        }
+        valid = [o for o, v in candidates.items() if v is not None]
+        order: Literal["mdy", "dmy"] | None
+        if date_order != "auto":
+            order = date_order
+        elif len(valid) == 1:
+            order = valid[0]
+            settled = order
+        else:
+            order = prefer
+        when = candidates.get(order)
+
+    location: Gps | None = None
+    if when is not None and (g := gps.search(line)):
         try:
-            when = datetime.datetime.strptime("".join(t.groups()), ts_format)
+            lat = float(g.group(1) + "." + g.group(2))
+            lon = -float(g.group(3) + "." + g.group(4))
+            speed = int(g.group(5)) if g.group(5) else 0
+            location = (lat, lon, speed)
         except ValueError:
-            continue
-        if g is not None:
-            try:
-                lat = float(g.group(1) + "." + g.group(2))
-                lon = -float(g.group(3) + "." + g.group(4))
-                speed = int(g.group(5)) if g.group(5) else 0
-                location = (lat, lon, speed)
-            except ValueError:
-                pass
-        break
+            pass
 
+    return (when, location, settled)
+
+
+def parse_timestamp(
+    line: str, date_order: DateOrder = "auto", prefer: Literal["mdy", "dmy"] = "mdy"
+) -> tuple[datetime.datetime | None, Gps | None]:
+    """Parse the OCR'd stamp, detecting its format.
+
+    yyyy/mm/dd is unambiguous. For nn/nn/yyyy, auto mode picks month- or day-first
+    when only one reading is a valid date, and otherwise falls back to `prefer`.
+    """
+    when, location, _ = _parse(line, date_order, prefer)
+    return (when, location)
+
+
+def parse_with_settings(
+    line: str, settings: Settings
+) -> tuple[datetime.datetime | None, Gps | None]:
+    """Like parse_timestamp, but learns the date order across a batch."""
+    when, location, settled = _parse(line, settings.date_order, settings.inferred_order)
+    if settled and settled != settings.inferred_order:
+        logging.info(f"detected {settled} date order from {line.strip()!r}")
+        settings.inferred_order = settled
     return (when, location)
 
 
@@ -168,16 +217,51 @@ def _dms(value: float) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int
     return ((deg, 1), (minutes, 1), (seconds, 10000))
 
 
-def update_metadata(imagefile: str, when: datetime.datetime, location: Gps) -> None:
+def parse_timezone(name: str) -> datetime.tzinfo:
+    """Accept UTC, a fixed offset like +05:30, or an IANA name like America/Chicago."""
+    if name.upper() in ("UTC", "Z"):
+        return datetime.UTC
+    if m := re.fullmatch(r"([+-])(\d{1,2})(?::?(\d{2}))?", name):
+        delta = datetime.timedelta(hours=int(m.group(2)), minutes=int(m.group(3) or 0))
+        return datetime.timezone(-delta if m.group(1) == "-" else delta)
+    try:
+        return ZoneInfo(name)
+    except (KeyError, ValueError, OSError) as e:
+        raise ValueError(f"unknown time zone {name!r}") from e
+
+
+def _offset_string(moment: datetime.datetime) -> str:
+    offset = moment.utcoffset() or datetime.timedelta(0)
+    minutes = int(offset.total_seconds() // 60)
+    sign = "-" if minutes < 0 else "+"
+    return f"{sign}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
+
+
+def update_metadata(
+    imagefile: str,
+    when: datetime.datetime,
+    location: Gps,
+    tz: datetime.tzinfo = datetime.UTC,
+) -> None:
+    """Tag the image; `when` is the stamp's wall-clock time in zone `tz`."""
     logging.info(f"{imagefile}: tagging with timestamp and GPS metadata")
     lat, lon, speed = location
+    aware = when.replace(tzinfo=tz)
+    utc = aware.astimezone(datetime.UTC)
     try:
         exif = piexif.load(imagefile)
         exif["Exif"][piexif.ExifIFD.DateTimeOriginal] = when.strftime(
             "%Y:%m:%d %H:%M:%S"
         ).encode()
+        exif["Exif"][piexif.ExifIFD.OffsetTimeOriginal] = _offset_string(aware).encode()
         exif["GPS"].update(
             {
+                piexif.GPSIFD.GPSDateStamp: utc.strftime("%Y:%m:%d").encode(),
+                piexif.GPSIFD.GPSTimeStamp: (
+                    (utc.hour, 1),
+                    (utc.minute, 1),
+                    (utc.second, 1),
+                ),
                 piexif.GPSIFD.GPSLatitudeRef: b"N" if lat >= 0 else b"S",
                 piexif.GPSIFD.GPSLatitude: _dms(lat),
                 piexif.GPSIFD.GPSLongitudeRef: b"E" if lon >= 0 else b"W",
@@ -187,7 +271,7 @@ def update_metadata(imagefile: str, when: datetime.datetime, location: Gps) -> N
             }
         )
         piexif.insert(piexif.dump(exif), imagefile)
-        ts = when.timestamp()
+        ts = aware.timestamp()
         os.utime(imagefile, (ts, ts))
     except Exception as e:
         logging.error(f"{imagefile}: failed to write metadata: {e}")
@@ -243,7 +327,7 @@ def process_image(imagefile: str, settings: Settings, skip_ocr: bool = False) ->
         return True
 
     line = read_timestamp(imagefile, skip_ocr)
-    when, location = parse_timestamp(line)
+    when, location = parse_with_settings(line, settings)
 
     if when is None or location is None:
         logging.error(
@@ -254,7 +338,7 @@ def process_image(imagefile: str, settings: Settings, skip_ocr: bool = False) ->
             invalid_ts.write(f"{imagefile} {line.rstrip()}\n")
         return False
 
-    update_metadata(imagefile, when, location)
+    update_metadata(imagefile, when, location, settings.tz)
     adjust_image(imagefile, settings)
     return True
 
@@ -272,7 +356,7 @@ def process_manual_timestamps(settings: Settings, check_only: bool) -> bool:
                 continue
             imagefile = parts[0]
             line = parts[1] if len(parts) > 1 else ""
-            when, location = parse_timestamp(line)
+            when, location = parse_with_settings(line, settings)
             if when is None or location is None:
                 logging.error(
                     f"{imagefile}: invalid timestamp or GPS info {line.rstrip()}"
