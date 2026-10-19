@@ -97,7 +97,7 @@ def test_default_timezone_is_utc(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "name, offset",
+    ("name", "offset"),
     [("UTC", 0), ("-05:00", -300), ("+0530", 330), ("America/Chicago", None)],
 )
 def test_parse_timezone(name, offset):
@@ -107,7 +107,7 @@ def test_parse_timezone(name, offset):
 
 
 def test_parse_timezone_rejects_unknown():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Mars"):
         helpers.parse_timezone("Mars/Olympus")
 
 

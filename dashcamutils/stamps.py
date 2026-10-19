@@ -35,7 +35,7 @@ CONFUSABLES = {
     "B": "8",
     "g": "9",
 }
-DASHES = "-–—−_~"
+DASHES = "-–—−_~"  # noqa: RUF001 (the odd dashes are what OCR produces)
 UNIT_LETTERS = "MPHFK"
 MAX_SKIP = 2  # stray digits tolerated before any one field
 MIN_YEAR, MAX_YEAR = 2000, 2099

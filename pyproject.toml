@@ -52,7 +52,12 @@ select = [
     "B",   # flake8-bugbear (design flaws)
     "I",   # isort (clean import sorting)
     "UP",  # pyupgrade (modernizes old Python syntax)
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RUF", # ruff-specific rules
+    "PT",  # flake8-pytest-style
 ]
 ignore = [
-    "E501",  # long lines (regexes, shell commands); formatter handles the rest
+    "E501",   # long lines (regexes, shell commands); formatter handles the rest
+    "PT018",  # compound asserts are fine here
 ]

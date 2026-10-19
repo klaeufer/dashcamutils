@@ -228,11 +228,8 @@ def resolve(
         best = full[0]
         # a single misread digit in the date or time can put the reading
         # outside the window its neighbours allow
-        if (
-            prev is not None
-            and prev.when
-            and best.when < prev.when
-            or (nxt is not None and nxt.when and best.when > nxt.when)
+        if (prev is not None and prev.when and best.when < prev.when) or (
+            nxt is not None and nxt.when and best.when > nxt.when
         ):
             lo = prev.when if prev and prev.when else None
             hi = nxt.when if nxt and nxt.when else None

@@ -88,7 +88,7 @@ def test_out_of_order_detected_and_sorted():
     cands = [stamps.read_candidates(x) for x in shuffled]
     assert sequence.count_out_of_order(cands) == 1
     order = sequence.time_order(cands)
-    assert [shuffled[i] for i in order][0] == lines[0]
+    assert shuffled[order[0]] == lines[0]
     assert sequence.count_out_of_order([cands[i] for i in order]) == 0
 
 

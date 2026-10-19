@@ -142,11 +142,11 @@ def _find_shifts(stack: np.ndarray, offset: int = 0) -> list[int]:
     if best is None:
         return []
     k = best[1]
-    return (
-        _find_shifts(stack[:k], offset)
-        + [offset + k]
-        + _find_shifts(stack[k:], offset + k)
-    )
+    return [
+        *_find_shifts(stack[:k], offset),
+        offset + k,
+        *_find_shifts(stack[k:], offset + k),
+    ]
 
 
 def _edge_energy(gx: np.ndarray, tilt: float) -> float:
@@ -174,7 +174,7 @@ def _frame_tilt(gray: np.ndarray) -> tuple[float, float] | None:
     fine = np.arange(best - 0.5, best + 0.51, 0.1)
     fine_scores = [_edge_energy(gx, t) for t in fine]
     top = np.flatnonzero(np.array(fine_scores) >= max(fine_scores) * 0.9999)
-    return float(fine[int(round(float(top.mean())))]), max(fine_scores) / float(
+    return float(fine[round(float(top.mean()))]), max(fine_scores) / float(
         np.mean(scores)
     )
 
@@ -246,8 +246,8 @@ def fit_segments(
         c, a = fit(paths, crop, angle)
         return [(0, c, a)]
     step = max(1, len(paths) // SEGMENT_FRAMES)
-    stack, (_, full_h) = _load_gray(paths, limit=SEGMENT_FRAMES)
-    starts = [0] + [k * step for k in _find_shifts(stack)]
+    stack, _ = _load_gray(paths, limit=SEGMENT_FRAMES)
+    starts = [0, *(k * step for k in _find_shifts(stack))]
     if len(starts) == 1:
         c, a = fit(paths, crop, angle)
         return [(0, c, a)]
@@ -255,7 +255,7 @@ def fit_segments(
         f"the camera seems to have moved: {len(starts)} stretches of images "
         f"starting at images {[s + 1 for s in starts]}; fitting each separately"
     )
-    ends = starts[1:] + [len(paths)]
+    ends = [*starts[1:], len(paths)]
     out = []
     for first, end in zip(starts, ends, strict=True):
         logging.info(f"images {first + 1}-{end}:")
