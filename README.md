@@ -16,6 +16,14 @@ All other dependencies are Python packages installed automatically: Pillow (crop
 # Usage
 
 The command is `dashcam-tag`; the earlier name `tag_images` still works as an alias.
+Typical use, on a folder of images listed in capture order:
+
+```
+dashcam-tag --repair -z America/Chicago GRMN*.JPG
+```
+
+Hood crop and tilt are detected automatically, stamps are repaired from their neighbours,
+and each image is tagged and cropped.
 
 ```
 usage: dashcam-tag [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
@@ -70,15 +78,33 @@ and once one is seen the rest of the batch is read the same way; a lone ambiguou
 like `03/04/2022` is read month-first unless you pass `-d dmy`.
 
 The stamp carries no time zone, so it is assumed to be UTC. If your camera clock is set to
-local time, pass `-z`. With `--no-gps-time-only`, the stamp is written to `DateTimeOriginal` as shown, together with
-`OffsetTimeOriginal`, the UTC `GPSDateStamp`/`GPSTimeStamp`, and the file modification time.
+local time, pass `-z`. The UTC `GPSDateStamp`/`GPSTimeStamp` and the file modification time
+are always written; with `--no-gps-time-only` the stamp is also written to `DateTimeOriginal`
+as shown, together with `OffsetTimeOriginal`.
 
 Google Photos can get confused by local-time tags that don't match the position, so by
 default `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`, the `OffsetTime*` and
 `SubSecTime*` tags are removed, leaving only the UTC GPS date and time, from which Google
 Photos works out the local time zone of the location. Images with no location keep their
 local-time tags, since there is nothing to infer a zone from. Pass `--no-gps-time-only`
-to keep `DateTimeOriginal` and `OffsetTimeOriginal` as described above.
+to keep `DateTimeOriginal` and `OffsetTimeOriginal` as described above. Note that the
+removed tags are gone from the original once it is processed.
+
+## What is changed and written
+
+The original images are modified in place, and only their metadata: the EXIF block (GPS
+position and time, the tags above, and a `UserComment` note on images whose position was
+interpolated) and the file modification time. Their pixels are not touched. There is no
+backup, so work on copies if you want to keep the original EXIF.
+
+Next to the originals, in the current directory, the tool writes:
+
+- `<name>-cropped.jpg`: the rotated and cropped image, with the same EXIF;
+- `<name>.txt` and `<name>-timestamp.jpg`: the OCR text and the stamp strip it was read from;
+- `InvalidTimestamps.txt` and `RepairedTimestamps.txt`: images needing attention (see below).
+
+Running the tool again on the same originals gives the same tags and cropped images; the two
+log files are appended to, so they accumulate duplicate lines.
 
 ## Repairing misread stamps
 
@@ -104,16 +130,15 @@ Repair works in stages, and each image gets the best result that can be justifie
 
 Every image that is not a clean reading is listed in `RepairedTimestamps.txt` (with the
 status `repaired`, `interpolated` or `time-only`) next to what OCR read, so they can be
-reviewed. A batch is assumed to use one date format throughout (as a camera writes them): the format
-most cleanly read stamps agree on is chosen, and readings in any other format are ignored
-with a warning. OCR is also retried on the stamp with a few preprocessings (contrast,
+reviewed. A batch is assumed to use one date format throughout, as a camera writes them:
+the format most cleanly read stamps agree on is chosen, and readings in any other format
+are ignored with a warning. OCR is also retried on the stamp with a few preprocessings (contrast,
 binarising, padding) when the first reading doesn't parse cleanly. Interpolation is
 not attempted across gaps over 10 minutes.
 
 Repair assumes the images are listed in capture order; if the readable timestamps run
 backwards a warning is logged, and `--sort-by-time` reorders the batch by them instead.
-Repair is a heuristic: it
-works best on densely sampled sequences, where neighbours constrain each stamp tightly.
+Repair is a heuristic: it works best on densely sampled sequences, where neighbours constrain each stamp tightly.
 
 ## Automatic hood crop and rotation
 
