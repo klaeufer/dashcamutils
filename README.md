@@ -16,7 +16,14 @@ It then crops the image to remove the timestamp and usually the vehicle hood.
 
 - Python 3.12 or later
 
-All other dependencies are Python packages installed automatically: Pillow (cropping/rotation), RapidOCR (OCR; downloads its models on first use), and piexif (EXIF metadata).
+All other dependencies are Python packages installed automatically:
+
+- Pillow (cropping and rotation) and NumPy (hood and tilt detection);
+- RapidOCR, running on ONNX Runtime (OCR);
+- piexif (EXIF metadata);
+- tzdata, on Windows only, for named time zones such as `America/Chicago`.
+
+RapidOCR downloads its models the first time it runs, so the first run needs internet access.
 
 # Usage
 
