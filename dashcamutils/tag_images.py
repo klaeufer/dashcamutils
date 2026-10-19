@@ -24,6 +24,20 @@ def _auto_or[T](convert: Callable[[str], T]) -> Callable[[str], T | None]:
     return parse
 
 
+def _nonnegative_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(
+            "expected auto or a nonnegative integer (>= 0)"
+        ) from e
+    if number < 0:
+        raise argparse.ArgumentTypeError(
+            "expected auto or a nonnegative integer (>= 0)"
+        )
+    return number
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="dashcam-tag")
     parser.add_argument(
@@ -31,9 +45,10 @@ def main() -> None:
         "--crop-bottom",
         "--crop_height",
         dest="crop_bottom",
-        help="pixels to crop from the bottom (e.g., the hood), or auto (default) "
+        help="nonnegative pixels to crop from the bottom (0 disables cropping), "
+        "or auto (default) "
         "to detect the hood from the whole batch",
-        type=_auto_or(int),
+        type=_auto_or(_nonnegative_int),
         default=None,
     )
     parser.add_argument(
@@ -132,6 +147,15 @@ def main() -> None:
         interpolate=args.interpolate,
         sort_by_time=args.sort_by_time,
     )
+
+    if not args.image and not settings.manual_ts_file.is_file():
+        parser.print_usage(sys.stderr)
+        parser.exit(
+            2,
+            "dashcam-tag: no images or ManualTimestamps.txt supplied. "
+            "Pass image paths or create ManualTimestamps.txt.\n"
+            "Example: dashcam-tag --repair -z America/Chicago GRMN*.JPG\n",
+        )
 
     if not args.validity_check_manual and (
         args.crop_bottom is None or args.angle is None

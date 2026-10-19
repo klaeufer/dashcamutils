@@ -28,6 +28,13 @@ RapidOCR downloads its models the first time it runs, so the first run needs int
 # Usage
 
 The command is `dashcam-tag`; the earlier name `tag_images` still works as an alias.
+
+> **Warning: work on copies.** Processing changes original EXIF metadata and file
+> timestamps in place, but does not change the original pixels. No backup is created.
+> By default, local-time EXIF tags are removed when a location is available (see below).
+> Existing cropped outputs are overwritten on reruns; regenerated OCR text and timestamp
+> strips are overwritten too.
+
 Typical use, on a folder of images listed in capture order:
 
 ```
@@ -36,6 +43,10 @@ dashcam-tag --repair -z America/Chicago GRMN*.JPG
 
 Hood crop and tilt are detected automatically, stamps are repaired from their neighbours,
 and each image is tagged and cropped.
+
+With no image arguments, the tool processes `ManualTimestamps.txt` in the current working
+directory if it exists. If neither images nor that file are supplied, it prints usage and an
+example, exits with status **2**, and performs no processing.
 
 ```
 usage: dashcam-tag [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
@@ -46,8 +57,9 @@ usage: dashcam-tag [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
                    [image ...]
 
   -c, --crop-bottom CROP_BOTTOM
-                        pixels to crop from the bottom (e.g., the hood), or
-                        auto (default) to detect the hood from the batch
+                        nonnegative pixels to crop from the bottom (0 disables
+                        cropping), or auto (default) to detect the hood from
+                        the batch
   -r, --angle ANGLE     rotation in degrees counterclockwise, as in
                         PIL.Image.rotate, or auto (default) to estimate the
                         camera tilt from the batch
@@ -106,17 +118,32 @@ removed tags are gone from the original once it is processed.
 
 The original images are modified in place, and only their metadata: the EXIF block (GPS
 position and time, the tags above, and a `UserComment` note on images whose position was
-interpolated) and the file modification time. Their pixels are not touched. There is no
-backup, so work on copies if you want to keep the original EXIF.
+interpolated) and the file access and modification timestamps. Their pixels are not touched.
+By default, local-time EXIF tags are removed when a location is available. There is no
+backup, so work on copies if you want to keep the original metadata and file timestamps.
 
-Next to the originals, in the current directory, the tool writes:
+Per-image artifacts are written **beside each input image**, even when it is outside the
+current working directory:
 
 - `<name>-cropped.jpg`: the rotated and cropped image, with the same EXIF;
 - `<name>.txt` and `<name>-timestamp.jpg`: the OCR text and the stamp strip it was read from;
-- `InvalidTimestamps.txt` and `RepairedTimestamps.txt`: images needing attention (see below).
 
-Running the tool again on the same originals gives the same tags and cropped images; the two
-log files are appended to, so they accumulate duplicate lines.
+Regenerating these artifacts overwrites existing files at those paths. With `--skip_ocr`,
+the tool reuses existing per-image `.txt` files instead of regenerating OCR text and timestamp
+strips; cropped outputs are still regenerated.
+
+The default report paths, **`InvalidTimestamps.txt` and `RepairedTimestamps.txt`, are in the
+current working directory**, not necessarily beside the images. Reports append across runs
+and can contain duplicate entries.
+
+For example, from a working directory separate from your copied images:
+
+```sh
+dashcam-tag --repair -z America/Chicago /path/to/image-copies/GRMN*.JPG
+```
+
+The cropped JPGs, OCR text, and timestamp-strip JPGs go in `/path/to/image-copies/`; failure
+and repair reports go in the directory where you ran the command.
 
 ## Repairing misread stamps
 
