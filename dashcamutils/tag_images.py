@@ -11,12 +11,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-c",
+        "--crop-bottom",
         "--crop_height",
-        help="height of hood section to be cropped in pixels",
+        dest="crop_bottom",
+        help="pixels to crop from the bottom (e.g., the hood)",
         type=int,
     )
     parser.add_argument(
-        "-r", "--rotation_angle", help="image rotation angle", type=float, default=0
+        "-r",
+        "--angle",
+        "--rotation_angle",
+        dest="angle",
+        help="rotation in degrees counterclockwise, as in PIL.Image.rotate",
+        type=float,
+        default=0,
     )
     parser.add_argument(
         "-s",
@@ -36,17 +44,15 @@ def main() -> None:
     args = parser.parse_args()
 
     # Make -c required unless -v is specified
-    if not args.validity_check_manual and args.crop_height is None:
+    if not args.validity_check_manual and args.crop_bottom is None:
         parser.error(
-            "-c/--crop_height is required unless -v/--validity_check_manual is specified"
+            "-c/--crop-bottom is required unless -v/--validity_check_manual is specified"
         )
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     logging.debug(args)
 
-    settings = helpers.Settings(
-        crop_height=args.crop_height, rotation=args.rotation_angle
-    )
+    settings = helpers.Settings(crop_bottom=args.crop_bottom or 0, angle=args.angle)
 
     if not args.image:
         if helpers.process_manual_timestamps(settings, args.validity_check_manual):
