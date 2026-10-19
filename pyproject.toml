@@ -10,8 +10,8 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Konstantin Läufer", email = "laufer@cs.luc.edu" }]
-requires-python = ">=3.14"
-dependencies = ["exif", "Pillow", "pytesseract"]
+requires-python = ">=3.12"
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/klaeufer/dashcamutils"
@@ -20,7 +20,11 @@ Homepage = "https://github.com/klaeufer/dashcamutils"
 tag_images = "dashcamutils.tag_images:main"
 
 [dependency-groups]
-dev = ["ruff", "ty"]
+dev = [
+    "pytest>=9.1.1",
+    "ruff",
+    "ty",
+]
 
 [tool.setuptools]
 packages = ["dashcamutils"]
@@ -29,7 +33,7 @@ packages = ["dashcamutils"]
 version = { attr = "dashcamutils.version.__version__" }
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py312"
 line-length = 88
 
 [tool.ruff.lint]
@@ -42,7 +46,5 @@ select = [
     "UP",  # pyupgrade (modernizes old Python syntax)
 ]
 ignore = [
-    "E501",  # long lines (f-strings, shell commands); formatter handles the rest
-    "E722",  # legacy bare excepts: baseline, tighten later
-    "E741",  # legacy `l` variable names: baseline, tighten later
+    "E501",  # long lines (regexes, shell commands); formatter handles the rest
 ]

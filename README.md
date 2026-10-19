@@ -74,7 +74,7 @@ $ uv sync
 $ uv run tag_images ...
 ```
 
-Checks (ruff lint/format and ty type check):
+Checks (ruff lint/format, ty type check, pytest):
 
 ```
 $ make check

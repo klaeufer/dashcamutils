@@ -8,6 +8,9 @@ lint:
 typecheck:
 	uv run ty check
 
-check: lint typecheck
+test:
+	uv run pytest
 
-.PHONY: init lint typecheck check
+check: lint typecheck test
+
+.PHONY: init lint typecheck test check
