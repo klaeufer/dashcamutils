@@ -452,7 +452,11 @@ def process_batch(
     for f in set(images) - set(files):
         logging.warning(f"Image file {f} not found, skipping")
 
-    lines = [read_timestamp(f, skip_ocr) for f in files]
+    total = len(files)
+    lines = []
+    for current, f in enumerate(files, 1):
+        logging.info("[%d/%d] OCR-reading %s", current, total, f)
+        lines.append(read_timestamp(f, skip_ocr))
     first: stamps.DateFormat = (
         "dmy"
         if settings.date_order == "dmy"
@@ -496,7 +500,10 @@ def process_batch(
     resolved = sequence.resolve(candidates, settings.interpolate)
 
     ok = True
-    for f, line, r in zip(files, lines, resolved, strict=True):
+    for current, (f, line, r) in enumerate(
+        zip(files, lines, resolved, strict=True), 1
+    ):
+        logging.info("[%d/%d] writing %s", current, total, f)
         loc = r.location
         if r.when is None:
             logging.error(

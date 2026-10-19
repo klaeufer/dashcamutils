@@ -220,8 +220,13 @@ def main() -> None:
     if settings.repair:
         found_invalid = not helpers.process_batch(args.image, settings, args.skip_ocr)
     else:
+        files = [imagefile for imagefile in args.image if Path(imagefile).is_file()]
+        for imagefile in set(args.image) - set(files):
+            logging.warning("Image file %s not found, skipping", imagefile)
         found_invalid = False
-        for imagefile in args.image:
+        total = len(files)
+        for current, imagefile in enumerate(files, 1):
+            logging.info("[%d/%d] processing %s", current, total, imagefile)
             if not helpers.process_image(imagefile, settings, args.skip_ocr):
                 found_invalid = True
     helpers.check_invalid_timestamps_found(settings, found_invalid)

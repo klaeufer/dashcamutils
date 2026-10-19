@@ -70,3 +70,32 @@ def test_settings_summary_shows_hemisphere_for_repair(caplog):
     with caplog.at_level("INFO"):
         tag_images._log_settings(args, tag_images.helpers.Settings(repair=True), False)
     assert any("expected hemisphere: NW" in record.message for record in caplog.records)
+
+
+def test_normal_progress_counts_only_existing_files(tmp_path, monkeypatch, caplog):
+    first = tmp_path / "first.jpg"
+    second = tmp_path / "second.jpg"
+    first.touch()
+    second.touch()
+    missing = tmp_path / "missing.jpg"
+    monkeypatch.setattr(sys, "argv", [
+        "dashcam-tag",
+        "-c",
+        "0",
+        "-r",
+        "0",
+        str(first),
+        str(second),
+        str(missing),
+    ])
+    monkeypatch.setattr(
+        tag_images.helpers,
+        "process_image",
+        lambda imagefile, settings, skip_ocr=False: True,
+    )
+    with caplog.at_level("INFO"):
+        tag_images.main()
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages.count(f"[1/2] processing {first}") == 1
+    assert messages.count(f"[2/2] processing {second}") == 1
+    assert any(f"Image file {missing} not found" in message for message in messages)
