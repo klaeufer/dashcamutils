@@ -136,3 +136,8 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Generated sample outputs
+data/*-cropped.jpg
+data/*-timestamp.jpg
+data/*.txt
