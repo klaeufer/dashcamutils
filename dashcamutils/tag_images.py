@@ -1,40 +1,67 @@
 #!/usr/bin/env python
 
-from . import helpers
-
 import argparse
 import logging
+import sys
 
-def main():
+from . import helpers
+
+
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--crop_height", help="height of hood section to be cropped in pixels", type=int)
-    parser.add_argument("-r", "--rotation_angle", help="image rotation angle", type=float, default=0)
-    parser.add_argument("-s", "--skip_ocr", help="skip extraction of timestamp using OCR", action="store_true")
-    parser.add_argument("-v", "--validity_check_manual", help="check validity of manual timestamps", action="store_true")
-    parser.add_argument("image", help="images to process", nargs='*')
-    
+    parser.add_argument(
+        "-c",
+        "--crop_height",
+        help="height of hood section to be cropped in pixels",
+        type=int,
+    )
+    parser.add_argument(
+        "-r", "--rotation_angle", help="image rotation angle", type=float, default=0
+    )
+    parser.add_argument(
+        "-s",
+        "--skip_ocr",
+        help="skip extraction of timestamp using OCR",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-v",
+        "--validity_check_manual",
+        help="check validity of manual timestamps",
+        action="store_true",
+    )
+    parser.add_argument("--verbose", help="enable debug logging", action="store_true")
+    parser.add_argument("image", help="images to process", nargs="*")
+
     args = parser.parse_args()
 
     # Make -c required unless -v is specified
     if not args.validity_check_manual and args.crop_height is None:
-        parser.error("-c/--crop_height is required unless -v/--validity_check_manual is specified")
+        parser.error(
+            "-c/--crop_height is required unless -v/--validity_check_manual is specified"
+        )
 
-    logging.basicConfig(level=logging.DEBUG)
-    logging.info(args)
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+    logging.debug(args)
 
-    helpers.ROTATION = args.rotation_angle
-    helpers.CROP = args.crop_height
-    helpers.FILENAME_MANUAL_TS = "ManualTimestamps.txt"
-    helpers.FILENAME_INVALID_TS = "InvalidTimestamps.txt"
+    settings = helpers.Settings(
+        crop_height=args.crop_height, rotation=args.rotation_angle
+    )
 
     if not args.image:
-        helpers.process_manual_timestamps(args.validity_check_manual)
-    helpers.check_invalid_timestamps_exist()
+        if helpers.process_manual_timestamps(settings, args.validity_check_manual):
+            sys.exit(2)
+        return
 
+    helpers.check_invalid_timestamps_exist(settings)
+    found_invalid = False
     for imagefile in args.image:
-        helpers.process_image(imagefile, args.skip_ocr)
+        if not helpers.process_image(imagefile, settings, args.skip_ocr):
+            found_invalid = True
+    helpers.check_invalid_timestamps_found(settings, found_invalid)
+    if found_invalid:
+        sys.exit(1)
 
-    helpers.check_invalid_timestamps_found()
 
 # TODO hemisphere EW/NS prefixes
 

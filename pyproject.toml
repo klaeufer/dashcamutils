@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dashcamutils"
+dynamic = ["version"]
+description = "Garmin Dash Cam utilities for populating EXIF metadata from visual timestamp embedded in images"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Konstantin Läufer", email = "laufer@cs.luc.edu" }]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/klaeufer/dashcamutils"
+
+[project.scripts]
+tag_images = "dashcamutils.tag_images:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff",
+    "ty",
+]
+
+[tool.setuptools]
+packages = ["dashcamutils"]
+
+[tool.setuptools.dynamic]
+version = { attr = "dashcamutils.version.__version__" }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes (syntax/logical errors)
+    "B",   # flake8-bugbear (design flaws)
+    "I",   # isort (clean import sorting)
+    "UP",  # pyupgrade (modernizes old Python syntax)
+]
+ignore = [
+    "E501",  # long lines (regexes, shell commands); formatter handles the rest
+]
