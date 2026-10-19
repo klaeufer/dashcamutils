@@ -18,7 +18,8 @@ All other dependencies are Python packages installed automatically: Pillow (crop
 ```
 usage: tag_images [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
                   [-d {auto,mdy,dmy}] [--hemisphere {NW,NE,SW,SE}]
-                  [--repair] [--interpolate] [--sort-by-time] [-s] [-v] [--verbose]
+                  [--repair] [--interpolate | --no-interpolate]
+                  [--sort-by-time] [-s] [-v] [--verbose]
                   [image ...]
 
   -c, --crop-bottom CROP_BOTTOM
@@ -38,8 +39,9 @@ usage: tag_images [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
                         (default NW; the camera prints '-' for S and W)
   --repair              repair misread stamps by fuzzy parsing and checking
                         them against neighbouring images (capture order)
-  --interpolate         with --repair, estimate time and position of
-                        unreadable stamps from neighbouring images
+  --interpolate, --no-interpolate
+                        with --repair, estimate the position of images whose
+                        GPS can't be read from their neighbours (default)
   --sort-by-time        with --repair, process images in the order of their
                         readable timestamps rather than the order given
   -s, --skip_ocr        skip extraction of timestamp using OCR
@@ -75,10 +77,19 @@ corrected when that makes them fit. Signs follow the camera's `-` for S and W; `
 says which signs to expect when none is visible, and a reading whose signs contradict it
 needs the neighbours' support to be believed.
 
-Every changed image is listed in `RepairedTimestamps.txt` with what OCR read, so repairs can
-be reviewed. Stamps that remain unusable go to `InvalidTimestamps.txt` as before, unless you
-add `--interpolate`, which estimates their time and position linearly between the nearest
-good neighbours and marks such images in the EXIF `UserComment`. A batch is assumed to use one date format throughout (as a camera writes them): the format
+Repair works in stages, and each image gets the best result that can be justified:
+
+1. a clean or repairable stamp is tagged with its time and position;
+2. if only the GPS part is unreadable, the position is interpolated linearly between the
+   nearest located neighbours (unless `--no-interpolate`), provided they are within 10
+   minutes of each other, and the image is marked in the EXIF `UserComment`;
+3. otherwise the image is tagged with its time only and the position is left blank, to be
+   added later by hand if wanted;
+4. only if even the time can't be read does the image go to `InvalidTimestamps.txt`.
+
+Every image that is not a clean reading is listed in `RepairedTimestamps.txt` (with the
+status `repaired`, `interpolated` or `time-only`) next to what OCR read, so they can be
+reviewed. A batch is assumed to use one date format throughout (as a camera writes them): the format
 most cleanly read stamps agree on is chosen, and readings in any other format are ignored
 with a warning. OCR is also retried on the stamp with a few preprocessings (contrast,
 binarising, padding) when the first reading doesn't parse cleanly. Interpolation is

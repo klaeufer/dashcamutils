@@ -79,9 +79,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--interpolate",
-        help="with --repair, estimate time and position of unreadable stamps "
-        "from neighbouring images and mark them in EXIF UserComment",
-        action="store_true",
+        help="with --repair, estimate the position of images whose GPS can't be "
+        "read from neighbouring images (default); otherwise, or when the "
+        "neighbours are too far apart in time, the position is left blank and "
+        "only the time is tagged",
+        action=argparse.BooleanOptionalAction,
+        default=True,
     )
     parser.add_argument(
         "--sort-by-time",
@@ -115,7 +118,7 @@ def main() -> None:
         tz=args.timezone,
         date_order=args.date_order,
         hemisphere=args.hemisphere,
-        repair=args.repair or args.interpolate,
+        repair=args.repair,
         interpolate=args.interpolate,
         sort_by_time=args.sort_by_time,
     )

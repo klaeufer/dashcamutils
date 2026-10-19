@@ -15,7 +15,7 @@ from typing import Literal
 
 from .stamps import Reading
 
-type Status = Literal["ok", "repaired", "interpolated", "unreadable"]
+type Status = Literal["ok", "repaired", "interpolated", "time-only", "unreadable"]
 
 CLEAN_COST = 0.5  # readings at or below this cost are trusted anchors
 MAX_SPEED_MS = 70.0  # ~155 mph; faster between two stamps is implausible
@@ -269,12 +269,12 @@ def resolve(
             ),
             None,
         )
-        out[i] = Resolved(when, None, None, 0, "unreadable")
+        out[i] = Resolved(when, None, None, 0, "time-only" if when else "unreadable")
 
     if interpolate:
         for i in range(n):
             r = out[i]
-            if r is None or r.location is not None:
+            if r is None or r.when is None or r.location is not None:
                 continue
             _fill(out, i)
 
@@ -282,7 +282,8 @@ def resolve(
 
 
 def _fill(out: list[Resolved | None], i: int) -> None:
-    """Linearly interpolate image `i` from the nearest located neighbours."""
+    """Interpolate the position of image `i`, whose time is known, linearly in time
+    between the nearest located neighbours."""
     n = len(out)
 
     def located(step: int) -> int | None:
@@ -306,9 +307,7 @@ def _fill(out: list[Resolved | None], i: int) -> None:
         return
     when = cur.when
     if when is None:
-        # spread the gap evenly by image index
-        frac = (i - a) / (b - a)
-        when = ra.when + (rb.when - ra.when) * frac
+        return
     span = (rb.when - ra.when).total_seconds()
     f = (
         0.0

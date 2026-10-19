@@ -62,10 +62,12 @@ def test_implausible_jump_is_not_accepted_as_clean():
     assert res[2].lon != -7.66727
 
 
-def test_unreadable_is_interpolated_only_on_request():
+def test_missing_gps_is_interpolated_unless_disabled():
     lines = [GOOD.format(s=s, p=s) for s in (10, 12, 14)]
     lines[1] = "GARMIN 03/21/2026 21:14:12"
-    assert _seq(lines)[1].status == "unreadable"
+    off = _seq(lines)[1]
+    assert off.status == "time-only" and off.location is None
+    assert off.when == datetime.datetime(2026, 3, 21, 21, 14, 12)
     mid = _seq(lines, interpolate=True)[1]
     assert mid.status == "interpolated"
     assert mid.lat is not None and 41.89010 < mid.lat < 41.89014
@@ -111,7 +113,9 @@ def test_no_interpolation_across_long_gaps():
         "GARMIN 2026/08/20 21:30:00",
         "GARMIN 2026/09/03 15:10:25 41.92609 -87.81998 0 MPH",
     ]
-    assert _seq(lines, interpolate=True)[1].status == "unreadable"
+    far = _seq(lines, interpolate=True)[1]
+    assert far.status == "time-only" and far.location is None
+    assert far.when == datetime.datetime(2026, 8, 20, 21, 30, 0)
 
 
 def test_batch_format_is_locked_to_the_majority():
@@ -133,3 +137,9 @@ def test_ambiguous_date_follows_the_batch():
     assert stamps.detect_format(cands) == "dmy"
     locked = stamps.only_format(cands, "dmy")
     assert locked[1][0].when.month == 4
+
+
+def test_nothing_readable_is_unreadable():
+    lines = [GOOD.format(s=s, p=s) for s in (10, 12)]
+    lines.insert(1, "GA0 0 028- 2 : 000PH")
+    assert _seq(lines, interpolate=True)[1].status == "unreadable"

@@ -40,7 +40,7 @@ class Settings:
     hemisphere: stamps.Hemisphere = "NW"
     # repair unreadable stamps using neighbouring images (batch mode)
     repair: bool = False
-    interpolate: bool = False
+    interpolate: bool = True
     # reorder a batch by its readable timestamps instead of trusting list order
     sort_by_time: bool = False
 
@@ -284,16 +284,17 @@ def _offset_string(moment: datetime.datetime) -> str:
 def update_metadata(
     imagefile: str,
     when: datetime.datetime,
-    location: Gps,
+    location: Gps | None,
     tz: datetime.tzinfo = datetime.UTC,
     note: str | None = None,
 ) -> None:
     """Tag the image; `when` is the stamp's wall-clock time in zone `tz`.
 
+    With no `location` only the time is written.
+
     `note` is stored in UserComment, e.g. to mark values that were estimated.
     """
     logging.info(f"{imagefile}: tagging with timestamp and GPS metadata")
-    lat, lon, speed = location
     aware = when.replace(tzinfo=tz)
     utc = aware.astimezone(datetime.UTC)
     try:
@@ -310,14 +311,20 @@ def update_metadata(
                     (utc.minute, 1),
                     (utc.second, 1),
                 ),
-                piexif.GPSIFD.GPSLatitudeRef: b"N" if lat >= 0 else b"S",
-                piexif.GPSIFD.GPSLatitude: _dms(lat),
-                piexif.GPSIFD.GPSLongitudeRef: b"E" if lon >= 0 else b"W",
-                piexif.GPSIFD.GPSLongitude: _dms(lon),
-                piexif.GPSIFD.GPSSpeedRef: b"M",
-                piexif.GPSIFD.GPSSpeed: (speed, 1),
             }
         )
+        if location is not None:
+            lat, lon, speed = location
+            exif["GPS"].update(
+                {
+                    piexif.GPSIFD.GPSLatitudeRef: b"N" if lat >= 0 else b"S",
+                    piexif.GPSIFD.GPSLatitude: _dms(lat),
+                    piexif.GPSIFD.GPSLongitudeRef: b"E" if lon >= 0 else b"W",
+                    piexif.GPSIFD.GPSLongitude: _dms(lon),
+                    piexif.GPSIFD.GPSSpeedRef: b"M",
+                    piexif.GPSIFD.GPSSpeed: (speed, 1),
+                }
+            )
         if note:
             exif["Exif"][piexif.ExifIFD.UserComment] = b"ASCII\0\0\0" + note.encode(
                 "ascii", "replace"
@@ -452,9 +459,9 @@ def process_batch(
     ok = True
     for f, line, r in zip(files, lines, resolved, strict=True):
         loc = r.location
-        if r.when is None or loc is None:
+        if r.when is None:
             logging.error(
-                f"{f}: unusable timestamp or GPS info {line.rstrip()}, "
+                f"{f}: unusable timestamp {line.rstrip()}, "
                 f"writing to {settings.invalid_ts_file}"
             )
             with open(settings.invalid_ts_file, "a", encoding="utf-8") as bad:
@@ -463,14 +470,14 @@ def process_batch(
             continue
         note = None
         if r.status != "ok":
-            fixed = f"GARMIN {r.when:%m/%d/%Y %H:%M:%S} {loc[0]:.5f} {loc[1]:.5f} {loc[2]} MPH"
+            fixed = f"GARMIN {r.when:%m/%d/%Y %H:%M:%S}"
+            if loc is not None:
+                fixed += f" {loc[0]:.5f} {loc[1]:.5f} {loc[2]} MPH"
             logging.warning(f"{f}: {r.status}: {line.rstrip()!r} -> {fixed}")
             with open(settings.repaired_ts_file, "a", encoding="utf-8") as audit:
                 audit.write(f"{f} {fixed}  # {r.status}, OCR read: {line.rstrip()}\n")
             if r.status == "interpolated":
-                note = (
-                    "dashcamutils: time/position interpolated from neighbouring images"
-                )
+                note = "dashcamutils: position interpolated from neighbouring images"
         update_metadata(f, r.when, loc, settings.tz, note)
         adjust_image(f, settings)
     return ok
