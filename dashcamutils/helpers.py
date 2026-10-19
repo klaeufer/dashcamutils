@@ -27,7 +27,7 @@ type DateOrder = Literal["auto", "mdy", "dmy"]
 class Settings:
     crop_bottom: int = 0
     angle: float = 0
-    gps_time_only: bool = False
+    gps_time_only: bool = True
     # per-image (crop, angle) when the camera moved within the batch
     mounts: dict[str, tuple[int, float]] = field(default_factory=dict)
     # zone the camera clock is set to; stamps carry no zone of their own

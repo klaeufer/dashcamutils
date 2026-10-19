@@ -57,9 +57,11 @@ def main() -> None:
     parser.add_argument(
         "--gps-time-only",
         help="write the time only as UTC GPS date/time and remove the local-time "
-        "tags, so Google Photos infers the time zone from the location "
-        "(images without a location keep their local-time tags)",
-        action="store_true",
+        "tags, so Google Photos infers the time zone from the location (default; "
+        "images without a location keep their local-time tags); "
+        "--no-gps-time-only keeps DateTimeOriginal and the offset tags",
+        action=argparse.BooleanOptionalAction,
+        default=True,
     )
     parser.add_argument(
         "-d",

@@ -31,10 +31,11 @@ usage: tag_images [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
   -z, --timezone TIMEZONE
                         time zone the camera clock is set to: UTC (default),
                         an offset like -05:00, or a name like America/Chicago
-  --gps-time-only       write the time only as UTC GPS date/time and remove
+  --gps-time-only, --no-gps-time-only
+                        write the time only as UTC GPS date/time and remove
                         the local-time tags, so Google Photos infers the time
-                        zone from the location (images without a location
-                        keep their local-time tags)
+                        zone from the location (default; images without a
+                        location keep their local-time tags)
   -d, --date-order {auto,mdy,dmy}
                         how to read ambiguous nn/nn/yyyy dates; auto
                         (default) infers it from unambiguous stamps
@@ -66,14 +67,15 @@ and once one is seen the rest of the batch is read the same way; a lone ambiguou
 like `03/04/2022` is read month-first unless you pass `-d dmy`.
 
 The stamp carries no time zone, so it is assumed to be UTC. If your camera clock is set to
-local time, pass `-z`. The stamp is written to `DateTimeOriginal` as shown, together with
+local time, pass `-z`. With `--no-gps-time-only`, the stamp is written to `DateTimeOriginal` as shown, together with
 `OffsetTimeOriginal`, the UTC `GPSDateStamp`/`GPSTimeStamp`, and the file modification time.
 
-Google Photos can get confused by local-time tags that don't match the position. With
-`--gps-time-only`, `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`, the `OffsetTime*`
-and `SubSecTime*` tags are removed, leaving only the UTC GPS date and time, from which
-Google Photos works out the local time zone of the location. Images with no location keep
-their local-time tags, since there is nothing to infer a zone from.
+Google Photos can get confused by local-time tags that don't match the position, so by
+default `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`, the `OffsetTime*` and
+`SubSecTime*` tags are removed, leaving only the UTC GPS date and time, from which Google
+Photos works out the local time zone of the location. Images with no location keep their
+local-time tags, since there is nothing to infer a zone from. Pass `--no-gps-time-only`
+to keep `DateTimeOriginal` and `OffsetTimeOriginal` as described above.
 
 ## Repairing misread stamps
 
