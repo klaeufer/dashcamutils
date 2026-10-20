@@ -3,9 +3,12 @@ import logging
 from dashcamutils import helpers
 
 
-def test_progress_is_written_to_stderr(monkeypatch, capsys):
-    helpers._progress("[%d/%d] reading stamps %s", 1, 2, "a.jpg")
-    assert capsys.readouterr().err == "[1/2] reading stamps a.jpg\n"
+def test_progress_fallback_is_written_to_stderr(monkeypatch, capsys):
+    monkeypatch.setattr(helpers.sys.stderr, "isatty", lambda: False)
+    progress = helpers._Progress(1, "Reading stamps")
+    progress.update("reading stamps a.jpg")
+    progress.close()
+    assert capsys.readouterr().err == "[1/1] reading stamps a.jpg\n"
 
 
 def test_recoverable_timestamp_is_warning(tmp_path, caplog):

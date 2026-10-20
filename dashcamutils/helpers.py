@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import piexif
 from PIL import Image, ImageOps
+from tqdm import tqdm
 
 from . import sequence, stamps
 
@@ -62,8 +63,32 @@ def configure_ocr_logging(verbose: bool) -> None:
     _ocr_verbose = verbose
 
 
-def _progress(message: str, *args: object) -> None:
-    print(message % args, file=sys.stderr, flush=True)
+class _Progress:
+    def __init__(self, total: int, description: str):
+        self._total = total
+        self._current = 0
+        self._description = description
+        self._bar = (
+            tqdm(total=total, desc=description, unit="image", file=sys.stderr)
+            if sys.stderr.isatty()
+            else None
+        )
+
+    def update(self, message: str) -> None:
+        self._current += 1
+        if self._bar is None:
+            print(
+                f"[{self._current}/{self._total}] {message}",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            self._bar.set_postfix_str(message, refresh=False)
+            self._bar.update()
+
+    def close(self) -> None:
+        if self._bar is not None:
+            self._bar.close()
 
 
 def _ocr(img: Image.Image) -> str:
@@ -479,9 +504,13 @@ def process_batch(
 
     total = len(files)
     lines = []
-    for current, f in enumerate(files, 1):
-        _progress("[%d/%d] reading stamps %s", current, total, f)
-        lines.append(read_timestamp(f, skip_ocr))
+    progress = _Progress(total, "Reading stamps")
+    try:
+        for f in files:
+            progress.update(f"reading stamps {f}")
+            lines.append(read_timestamp(f, skip_ocr))
+    finally:
+        progress.close()
     first: stamps.DateFormat = (
         "dmy"
         if settings.date_order == "dmy"
@@ -525,30 +554,38 @@ def process_batch(
     resolved = sequence.resolve(candidates, settings.interpolate)
 
     ok = True
-    for current, (f, line, r) in enumerate(zip(files, lines, resolved, strict=True), 1):
-        _progress("[%d/%d] applying results %s", current, total, f)
-        loc = r.location
-        if r.when is None:
-            logging.warning(
-                f"{f}: unusable timestamp {line.rstrip()}, "
-                f"writing to {settings.invalid_ts_file}"
-            )
-            with open(settings.invalid_ts_file, "a", encoding="utf-8") as bad:
-                bad.write(f"{f} {line.rstrip()}\n")
-            ok = False
-            continue
-        note = None
-        if r.status != "ok":
-            fixed = f"GARMIN {r.when:%m/%d/%Y %H:%M:%S}"
-            if loc is not None:
-                fixed += f" {loc[0]:.5f} {loc[1]:.5f} {loc[2]} MPH"
-            logging.warning(f"{f}: {r.status}: {line.rstrip()!r} -> {fixed}")
-            with open(settings.repaired_ts_file, "a", encoding="utf-8") as audit:
-                audit.write(f"{f} {fixed}  # {r.status}, OCR read: {line.rstrip()}\n")
-            if r.status == "interpolated":
-                note = "dashcamutils: position interpolated from neighbouring images"
-        update_metadata(f, r.when, loc, settings.tz, note, settings.gps_time_only)
-        adjust_image(f, settings)
+    progress = _Progress(total, "Applying results")
+    try:
+        for f, line, r in zip(files, lines, resolved, strict=True):
+            progress.update(f"applying results {f}")
+            loc = r.location
+            if r.when is None:
+                logging.warning(
+                    f"{f}: unusable timestamp {line.rstrip()}, "
+                    f"writing to {settings.invalid_ts_file}"
+                )
+                with open(settings.invalid_ts_file, "a", encoding="utf-8") as bad:
+                    bad.write(f"{f} {line.rstrip()}\n")
+                ok = False
+                continue
+            note = None
+            if r.status != "ok":
+                fixed = f"GARMIN {r.when:%m/%d/%Y %H:%M:%S}"
+                if loc is not None:
+                    fixed += f" {loc[0]:.5f} {loc[1]:.5f} {loc[2]} MPH"
+                logging.warning(f"{f}: {r.status}: {line.rstrip()!r} -> {fixed}")
+                with open(settings.repaired_ts_file, "a", encoding="utf-8") as audit:
+                    audit.write(
+                        f"{f} {fixed}  # {r.status}, OCR read: {line.rstrip()}\n"
+                    )
+                if r.status == "interpolated":
+                    note = (
+                        "dashcamutils: position interpolated from neighbouring images"
+                    )
+            update_metadata(f, r.when, loc, settings.tz, note, settings.gps_time_only)
+            adjust_image(f, settings)
+    finally:
+        progress.close()
     return ok
 
 

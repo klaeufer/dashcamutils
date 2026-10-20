@@ -243,14 +243,14 @@ def main() -> None:
             logging.warning("Image file %s not found, skipping", imagefile)
         found_invalid = False
         total = len(files)
-        for current, imagefile in enumerate(files, 1):
-            print(
-                f"[{current}/{total}] processing {imagefile}",
-                file=sys.stderr,
-                flush=True,
-            )
-            if not helpers.process_image(imagefile, settings, args.skip_ocr):
-                found_invalid = True
+        progress = helpers._Progress(total, "Processing")
+        try:
+            for imagefile in files:
+                progress.update(f"processing {imagefile}")
+                if not helpers.process_image(imagefile, settings, args.skip_ocr):
+                    found_invalid = True
+        finally:
+            progress.close()
     helpers.check_invalid_timestamps_found(settings, found_invalid)
     if found_invalid:
         sys.exit(1)

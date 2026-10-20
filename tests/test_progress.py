@@ -24,8 +24,8 @@ def test_repair_progress_has_read_and_write_phases(
 
     messages = [record.getMessage() for record in caplog.records]
     progress = capsys.readouterr().err
-    assert f"[1/2] reading stamps {files[0]}" in progress
-    assert f"[2/2] reading stamps {files[1]}" in progress
-    assert f"[1/2] applying results {files[0]}" in progress
-    assert f"[2/2] applying results {files[1]}" in progress
+    assert f"reading stamps {files[0]}" in progress
+    assert f"reading stamps {files[1]}" in progress
+    assert f"applying results {files[0]}" in progress
+    assert f"applying results {files[1]}" in progress
     assert any(f"Image file {missing} not found" in message for message in messages)

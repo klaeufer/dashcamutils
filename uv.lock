@@ -271,6 +271,7 @@ dependencies = [
     { name = "piexif" },
     { name = "pillow" },
     { name = "rapidocr" },
+    { name = "tqdm" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 
@@ -289,6 +290,7 @@ requires-dist = [
     { name = "piexif", specifier = ">=1.1.3" },
     { name = "pillow", specifier = ">=13.0.0" },
     { name = "rapidocr", specifier = ">=3.10.0" },
+    { name = "tqdm", specifier = ">=4.70.1" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 
