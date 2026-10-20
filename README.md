@@ -32,6 +32,14 @@ All other dependencies are Python packages installed automatically:
 
 RapidOCR downloads its models the first time it runs, so the first run needs internet access.
 
+# Installation
+
+Install the latest release from [PyPI](https://pypi.org/project/dashcamutils/):
+
+```
+python -m pip install dashcamutils
+```
+
 # Usage
 
 The command is `dashcam-tag`; the earlier name `tag_images` still works as an alias.
