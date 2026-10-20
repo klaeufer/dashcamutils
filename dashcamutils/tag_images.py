@@ -7,6 +7,8 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from tqdm import tqdm
+
 from . import autofit, helpers
 
 
@@ -38,8 +40,25 @@ def _nonnegative_int(value: str) -> int:
     return number
 
 
+class _TqdmLoggingHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            message = self.format(record)
+            tqdm.write(message, file=sys.stderr)
+        except Exception:
+            self.handleError(record)
+
+
 def _configure_logging(verbose: bool) -> None:
-    logging.basicConfig(level=logging.DEBUG if verbose else logging.WARNING)
+    if sys.stderr.isatty():
+        handler: logging.Handler = _TqdmLoggingHandler()
+    else:
+        handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.WARNING,
+        handlers=[handler],
+    )
     helpers.configure_ocr_logging(verbose)
 
 

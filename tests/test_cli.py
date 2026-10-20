@@ -1,4 +1,5 @@
 import argparse
+import logging
 import sys
 
 import pytest
@@ -41,6 +42,18 @@ def test_configure_logging_also_configures_ocr(monkeypatch):
     tag_images._configure_logging(True)
 
     assert levels == [False, True]
+
+
+def test_tqdm_logging_handler_writes_above_progress(monkeypatch):
+    messages = []
+    monkeypatch.setattr(
+        tag_images.tqdm,
+        "write",
+        lambda message, **kwargs: messages.append(message),
+    )
+    handler = tag_images._TqdmLoggingHandler()
+    handler.emit(logging.LogRecord("root", logging.WARNING, "", 0, "warning", (), None))
+    assert messages == ["warning"]
 
 
 def test_empty_input_exits_before_autofit(tmp_path, monkeypatch, capsys):
