@@ -9,8 +9,15 @@
 # Purpose
 
 The current line of Garmin dash cams include a timestamp and GPS information visually in the image.
+
+![Example dash cam image with timestamp and GPS overlay](data/GRMN0595.JPG)
+
 This utility extracts this information using OCR, parses it, and populates the corresponding EXIF metadata.
 It then crops the image to remove the timestamp and usually the vehicle hood.
+
+![Example dash cam image in Google Photos](data/GRMN0595_in_GooglePhotos.png)
+
+
 
 # Dependencies
 
