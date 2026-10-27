@@ -92,6 +92,9 @@ supplied. Coordinate-bearing entries continue to behave normally.
 
 ```
 usage: dashcam-tag [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
+                   [--hood-method {batch,boundary}] [--hood-margin HOOD_MARGIN]
+                   [--hood-reference-fraction HOOD_REFERENCE_FRACTION]
+                   [--hood-overrides HOOD_OVERRIDES]
                    [--gps-time-only | --no-gps-time-only] [-d {auto,mdy,dmy}]
                    [--hemisphere {NW,NE,SW,SE}] [--repair]
                    [--interpolate | --no-interpolate] [--sort-by-time] [-s]
@@ -105,6 +108,18 @@ usage: dashcam-tag [-h] [-c CROP_BOTTOM] [-r ANGLE] [-z TIMEZONE]
   -r, --angle ANGLE     rotation in degrees counterclockwise, as in
                         PIL.Image.rotate, or auto (default) to estimate the
                         camera tilt from the batch
+  --hood-method {batch,boundary}
+                        hood crop estimator; boundary is experimental, batch
+                        is the default
+  --hood-margin HOOD_MARGIN
+                        pixels to retain above the estimated boundary (boundary
+                        method; default 10)
+  --hood-reference-fraction HOOD_REFERENCE_FRACTION
+                        image-width fraction used for center-reference crop
+                        (boundary method; default 0.3333)
+  --hood-overrides HOOD_OVERRIDES
+                        JSON object keyed by image path with manual crop/angle
+                        or per-column boundary/angle overrides
   -z, --timezone TIMEZONE
                         time zone the camera clock is set to: UTC (default),
                         an offset like -05:00, or a name like America/Chicago
@@ -241,3 +256,50 @@ evenly spaced images, at least 5) and logged, so you can reuse the values explic
   most images show clear vertical structure and agree; otherwise there is a warning and no rotation. Dense
   forest or winding roads often give too little to go on, so check the result and pass `-r`
   yourself if it declines or looks wrong.
+
+### Experimental per-image hood-boundary mode
+
+`--hood-method boundary` selects an experimental estimator that finds a hood edge in each
+image, estimates its slope, rotates to level that boundary, and chooses a crop using a
+center reference region. It uses the same NumPy and Pillow dependencies as the rest of the
+package; it does not require OpenCV. Batch fitting remains the default (`--hood-method batch`)
+and is unchanged.
+
+```sh
+dashcam-tag --hood-method boundary --hood-margin 10 \
+  --hood-reference-fraction 0.333333 --repair -z America/Chicago GRMN*.JPG
+```
+
+The default margin is 10 pixels above the detected boundary, and the default reference
+fraction is one third of the image width, centered horizontally. The crop removes everything
+below the selected line while retaining the full image width. **This center-reference policy
+does not guarantee that hood pixels are removed near the left and right edges.** The mode
+levels the detected hood boundary; that is not necessarily equivalent to leveling the scene
+horizon. It can be uncertain on frames with weak, curved, or competing edges, so inspect the
+resulting `-cropped.jpg` files before relying on them. Rotation uses the existing transform
+path, which trims empty corner wedges; output dimensions may therefore be smaller than a
+simple top/bottom crop would suggest.
+
+Explicit `-c`/`--crop-bottom` and `-r`/`--angle` values take precedence over the corresponding
+automatic estimate. To review the transform settings, pass `--verbose`. For persistent
+per-image corrections, pass `--hood-overrides overrides.json`. The file is a JSON object keyed
+by the image path as supplied to `dashcam-tag` (use the same spelling consistently). For
+example:
+
+```json
+{
+  "GRMN0561.JPG": {
+    "crop_bottom": 260,
+    "angle": 0.8
+  }
+}
+```
+
+An override may supply `crop_bottom` and `angle` together to bypass automatic boundary
+detection for that image. Alternatively, `boundary_y` supplies one y-coordinate per image
+column (origin at the top-left; y increases downward) and `angle` supplies the rotation in
+degrees. Boundary coordinates must match the image width and fall within its height; manual
+angles must be finite and within ±15°. A boundary-plus-angle override is converted into a crop
+using the configured margin and reference fraction. Overrides are not scaled automatically if
+image dimensions change. These corrections affect the generated crop only; source image pixels
+remain untouched, though the tool continues to update source metadata as described above.
