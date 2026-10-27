@@ -2,6 +2,7 @@
 
 import argparse
 import datetime
+import json
 import logging
 import sys
 from collections.abc import Callable
@@ -127,6 +128,29 @@ def main() -> None:
         default=None,
     )
     parser.add_argument(
+        "--hood-method",
+        choices=("batch", "boundary"),
+        default="batch",
+        help="hood crop estimator; boundary is experimental, batch is the default",
+    )
+    parser.add_argument(
+        "--hood-margin",
+        type=_nonnegative_int,
+        default=10,
+        help="pixels to retain above the estimated boundary (boundary method)",
+    )
+    parser.add_argument(
+        "--hood-reference-fraction",
+        type=float,
+        default=1 / 3,
+        help="image-width fraction used for center-reference crop (boundary method)",
+    )
+    parser.add_argument(
+        "--hood-overrides",
+        type=Path,
+        help="JSON object keyed by image path; entries may provide crop_bottom/angle or boundary_y/angle",
+    )
+    parser.add_argument(
         "-z",
         "--timezone",
         help="time zone the camera clock is set to: UTC (default), an offset "
@@ -219,7 +243,18 @@ def main() -> None:
         interpolate=args.interpolate,
         sort_by_time=args.sort_by_time,
         allow_time_only_manual=args.allow_time_only_manual,
+        hood_method=args.hood_method,
+        hood_margin=args.hood_margin,
+        hood_reference_fraction=args.hood_reference_fraction,
+        hood_overrides=json.loads(args.hood_overrides.read_text())
+        if args.hood_overrides
+        else {},
+        crop_explicit=args.crop_bottom is not None,
+        angle_explicit=args.angle is not None,
     )
+
+    if not 0 < settings.hood_reference_fraction <= 1:
+        parser.error("--hood-reference-fraction must be in (0, 1]")
 
     if not args.image and not settings.manual_ts_file.is_file():
         parser.print_usage(sys.stderr)
@@ -230,8 +265,10 @@ def main() -> None:
             "Example: dashcam-tag --repair -z America/Chicago GRMN*.JPG\n",
         )
 
-    if not args.validity_check_manual and (
-        args.crop_bottom is None or args.angle is None
+    if (
+        settings.hood_method == "batch"
+        and not args.validity_check_manual
+        and (args.crop_bottom is None or args.angle is None)
     ):
         images = args.image or helpers.manual_timestamp_images(settings)
         found = [f for f in images if Path(f).is_file()]

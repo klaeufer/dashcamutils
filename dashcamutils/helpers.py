@@ -15,7 +15,7 @@ import piexif
 from PIL import Image, ImageOps
 from tqdm import tqdm
 
-from . import sequence, stamps
+from . import hood, sequence, stamps
 
 # Region of the 1440p frame containing the Garmin timestamp/GPS overlay
 # left, upper, right, lower of the timestamp strip
@@ -51,6 +51,12 @@ class Settings:
     sort_by_time: bool = False
     # accept manual entries with a timestamp but no GPS location
     allow_time_only_manual: bool = False
+    hood_method: Literal["batch", "boundary"] = "batch"
+    hood_margin: int = 10
+    hood_reference_fraction: float = 1 / 3
+    hood_overrides: dict[str, dict] = field(default_factory=dict)
+    crop_explicit: bool = False
+    angle_explicit: bool = False
 
 
 _ocr_engine = None
@@ -445,6 +451,50 @@ def adjust_image(imagefile: str, settings: Settings) -> None:
             crop, angle = settings.mounts.get(
                 imagefile, (settings.crop_bottom, settings.angle)
             )
+            if settings.hood_method == "boundary":
+                override = settings.hood_overrides.get(imagefile, {})
+                points = override.get("boundary_y")
+                # A complete manual plan avoids detector invocation entirely.
+                if "crop_bottom" in override and "angle" in override and points is None:
+                    crop, angle = int(override["crop_bottom"]), float(override["angle"])
+                    plan = None
+                elif points is not None and "angle" in override:
+                    if len(points) != img.width or not all(
+                        isinstance(y, (int, float))
+                        and math.isfinite(y)
+                        and 0 <= y < img.height
+                        for y in points
+                    ):
+                        raise ValueError(
+                            "override boundary_y must contain one in-range value per image column"
+                        )
+                    plan = hood.plan_from_boundary(
+                        points,
+                        img.width,
+                        img.height,
+                        float(override["angle"]),
+                        settings.hood_margin,
+                        settings.hood_reference_fraction,
+                    )
+                else:
+                    plan = hood.estimate(
+                        img, settings.hood_margin, settings.hood_reference_fraction
+                    )
+                if plan is not None:
+                    crop = plan.crop_bottom if not settings.crop_explicit else crop
+                    angle = plan.angle if not settings.angle_explicit else angle
+                if points is None and override and plan is not None:
+                    angle = float(override.get("angle", angle))
+                    crop = int(override.get("crop_bottom", crop))
+                if settings.hood_method == "boundary" and plan is not None:
+                    logging.info(
+                        "%s: boundary hood estimate confidence %.2f%s",
+                        imagefile,
+                        plan.confidence,
+                        f"; review: {', '.join(plan.review_reasons)}"
+                        if plan.needs_review
+                        else "",
+                    )
             out = img
             box = (0, 0, *img.size)
             if angle:

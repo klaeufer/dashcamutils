@@ -6,7 +6,7 @@ import piexif
 import pytest
 from PIL import Image, ImageDraw
 
-from dashcamutils import helpers
+from dashcamutils import helpers, hood
 
 
 def _jpeg(path, size=(1280, 1440)):
@@ -94,6 +94,56 @@ def test_default_timezone_is_utc(tmp_path):
     assert exif["Exif"][piexif.ExifIFD.OffsetTimeOriginal] == b"+00:00"
     assert exif["GPS"][piexif.GPSIFD.GPSTimeStamp] == ((21, 1), (23, 1), (30, 1))
     assert f.stat().st_mtime == when.replace(tzinfo=datetime.UTC).timestamp()
+
+
+def test_boundary_hood_plan_uses_center_third_and_margin():
+    # A sharp, horizontal hood edge at y=500 in a 720px frame.
+    pixels = np.zeros((720, 640), dtype=np.uint8)
+    pixels[:500] = 220
+    pixels[500:] = 25
+    plan = hood.estimate(Image.fromarray(pixels), margin=10)
+    assert plan.crop_bottom == pytest.approx(230, abs=3)
+    assert len(plan.boundary_y) == 640
+
+
+def test_boundary_hood_plan_rejects_invalid_config():
+    image = Image.new("RGB", (100, 100))
+    with pytest.raises(ValueError, match="margin"):
+        hood.estimate(image, margin=-1)
+    with pytest.raises(ValueError, match="reference_fraction"):
+        hood.estimate(image, reference_fraction=0)
+
+
+def test_manual_boundary_plan_bypasses_detector(tmp_path, monkeypatch):
+    f = tmp_path / "a.jpg"
+    _jpeg(f, (640, 720))
+    points = [500] * 640
+    monkeypatch.setattr(
+        hood, "estimate", lambda *args: pytest.fail("detector should be bypassed")
+    )
+    settings = helpers.Settings(
+        hood_method="boundary",
+        hood_overrides={str(f): {"boundary_y": points, "angle": 0.0}},
+    )
+    helpers.adjust_image(str(f), settings)
+    with Image.open(tmp_path / "a-cropped.jpg") as out:
+        assert out.height == 490
+
+
+def test_explicit_crop_overrides_boundary_estimate(tmp_path, monkeypatch):
+    f = tmp_path / "a.jpg"
+    _jpeg(f, (640, 720))
+    monkeypatch.setattr(
+        hood,
+        "estimate",
+        lambda *args: hood.HoodPlan(2.0, 230, (500,) * 640, 0.9, False, ()),
+    )
+    settings = helpers.Settings(
+        hood_method="boundary", crop_bottom=100, crop_explicit=True
+    )
+    helpers.adjust_image(str(f), settings)
+    with Image.open(tmp_path / "a-cropped.jpg") as out:
+        assert out.height < 620  # explicit bottom crop plus inscribed rotation crop
 
 
 @pytest.mark.parametrize(

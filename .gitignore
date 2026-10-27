@@ -141,3 +141,4 @@ cython_debug/
 data/*-cropped.jpg
 data/*-timestamp.jpg
 data/GRMN*.txt
+data/*Timestamp*.txt
